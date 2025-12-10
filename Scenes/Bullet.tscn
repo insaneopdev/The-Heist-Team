@@ -1,0 +1,45 @@
+[gd_scene load_steps=9 format=3 uid="uid://cxmb6kgysuomn"]
+
+[ext_resource type="Script" uid="uid://dv4nwyg6jrir0" path="res://Scripts/Bulet.gd" id="1_vlxeq"]
+[ext_resource type="Texture2D" uid="uid://sl0ivryefgif" path="res://Assets/bullet.png" id="2_14k46"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_nr8tw"]
+radius = 0.507479
+
+[sub_resource type="Texture2DRD" id="Texture2DRD_vlxeq"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_14k46"]
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 1)
+albedo_texture = SubResource("Texture2DRD_vlxeq")
+albedo_texture_msdf = true
+
+[sub_resource type="SphereMesh" id="SphereMesh_qvus8"]
+material = SubResource("StandardMaterial3D_14k46")
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_pypll"]
+transparency = 1
+cull_mode = 2
+no_depth_test = true
+albedo_texture = ExtResource("2_14k46")
+
+[sub_resource type="QuadMesh" id="QuadMesh_vg3fc"]
+material = SubResource("StandardMaterial3D_pypll")
+size = Vector2(15, 15)
+
+[node name="bullet" type="Node3D"]
+
+[node name="Area3D" type="Area3D" parent="."]
+script = ExtResource("1_vlxeq")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
+shape = SubResource("SphereShape3D_nr8tw")
+
+[node name="bullet" type="MeshInstance3D" parent="Area3D"]
+mesh = SubResource("SphereMesh_qvus8")
+
+[node name="wall_impact" type="Node3D" parent="Area3D"]
+
+[node name="mesh" type="MeshInstance3D" parent="Area3D/wall_impact"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.194369, -0.73157)
+mesh = SubResource("QuadMesh_vg3fc")
