@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3 uid="uid://bhgru07juc6i7"]
+
+[ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
+
+[node name="Bank" type="Node3D"]
+
+[node name="bank" parent="." instance=ExtResource("1_4wep6")]
+
+[node name="Cylinder_001" parent="bank" index="17"]
+transform = Transform3D(-1.9256e-07, 0.338515, 0, -1.18193, -5.51511e-08, 0, 0, 0, 1.18193, -0.626714, 1.697, -6.82081)
+
+[editable path="bank"]
