@@ -1,41 +1,14 @@
-[gd_scene load_steps=20 format=3 uid="uid://deu6j6pxha5bv"]
+[gd_scene load_steps=14 format=3 uid="uid://deu6j6pxha5bv"]
 
 [ext_resource type="Script" uid="uid://bu5t4wqipikd1" path="res://Scripts/Player.gd" id="1_rpqav"]
+[ext_resource type="PackedScene" uid="uid://dwu1d3yy64sl2" path="res://Assets/Player/bean.glb" id="3_dewec"]
 [ext_resource type="PackedScene" uid="uid://cxmb6kgysuomn" path="res://Scenes/Bullet.tscn" id="3_gntrk"]
+[ext_resource type="Script" uid="uid://d21brs5ya0f0y" path="res://Scripts/RedDot.gd" id="4_dewec"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_rpqav"]
 size = Vector2(20, 20)
 
 [sub_resource type="WorldBoundaryShape3D" id="WorldBoundaryShape3D_rpqav"]
-
-[sub_resource type="Texture2DRD" id="Texture2DRD_kyqiw"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dewec"]
-shading_mode = 0
-albedo_color = Color(0.647059, 0.164706, 0.164706, 1)
-albedo_texture = SubResource("Texture2DRD_kyqiw")
-albedo_texture_msdf = true
-
-[sub_resource type="CapsuleMesh" id="CapsuleMesh_5ixxa"]
-material = SubResource("StandardMaterial3D_dewec")
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_kyqiw"]
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_5ixxa"]
-albedo_color = Color(0.470076, 0.470076, 0.470076, 1)
-albedo_texture = SubResource("NoiseTexture2D_kyqiw")
-albedo_texture_msdf = true
-
-[sub_resource type="TorusMesh" id="TorusMesh_nn08x"]
-material = SubResource("StandardMaterial3D_5ixxa")
-
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_kyqiw"]
-shading_mode = 0
-albedo_color = Color(0.320266, 0.750342, 0.0935719, 1)
-albedo_texture_msdf = true
-
-[sub_resource type="PrismMesh" id="PrismMesh_gntrk"]
-material = SubResource("StandardMaterial3D_kyqiw")
 
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_gntrk"]
 
@@ -59,9 +32,9 @@ albedo_texture_msdf = true
 [sub_resource type="BoxMesh" id="BoxMesh_kyqiw"]
 material = SubResource("StandardMaterial3D_nn08x")
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_qbkls"]
-radius = 0.504075
-height = 2.17456
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gntrk"]
+radius = 1.10779
+height = 5.0016
 
 [node name="Player" type="Node3D"]
 
@@ -78,39 +51,24 @@ shape = SubResource("WorldBoundaryShape3D_rpqav")
 transform = Transform3D(1, 0, 0, 0, 0.579566, 0.814926, 0, -0.814926, 0.579566, 0, 5.93502, 0)
 
 [node name="player" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.34502, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.89117, 0)
+collision_layer = 3
+collision_mask = 3
 script = ExtResource("1_rpqav")
 Bullet_Scene = ExtResource("3_gntrk")
 
 [node name="mesh" type="Node3D" parent="player"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
 
-[node name="body" type="Node3D" parent="player/mesh"]
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="player/mesh/body"]
-mesh = SubResource("CapsuleMesh_5ixxa")
-
-[node name="eyes" type="Node3D" parent="player/mesh"]
-transform = Transform3D(1, 0, 0, 0, -0.0966449, -0.995319, 0, 0.995319, -0.0966449, 0, 0.546936, -0.455603)
-
-[node name="eye_1" type="MeshInstance3D" parent="player/mesh/eyes"]
-transform = Transform3D(0.134575, 0, 0, 0, 0.361956, 0, 0, 0, 0.145786, -0.273912, 0, 0)
-mesh = SubResource("TorusMesh_nn08x")
-
-[node name="eye_2" type="MeshInstance3D" parent="player/mesh/eyes"]
-transform = Transform3D(0.134575, 0, 0, 0, 0.361956, 0, 0, 0, 0.145786, 0.310307, 0, 0)
-mesh = SubResource("TorusMesh_nn08x")
-
-[node name="mask" type="Node3D" parent="player/mesh"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.0543461, -0.0801277, -0.780654)
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="player/mesh/mask"]
-transform = Transform3D(1, 0, 0, 0, -1, 1.03923e-09, 0, 8.74228e-08, 0.0118874, 0, -0.0202718, 0.222496)
-mesh = SubResource("PrismMesh_gntrk")
+[node name="bean" parent="player/mesh" instance=ExtResource("3_dewec")]
+transform = Transform3D(1, 0, 0, 0, 1.00629, 0, 0, 0, 1, 0, 0, 0)
 
 [node name="pivot" type="Node3D" parent="player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.1182)
 
 [node name="secondary_gun" type="Node3D" parent="player/pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.358102, 0.308244, -1.02125)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.04179, -0.394461, -0.96715)
+visible = false
 
 [node name="gun_muzzle" type="Marker3D" parent="player/pivot/secondary_gun"]
 transform = Transform3D(0.525708, 0, 0, 0, -3.91289e-08, 0.614935, 0, -0.895164, -2.68796e-08, 0, 0, -0.946315)
@@ -123,8 +81,7 @@ mesh = SubResource("CapsuleMesh_kyqiw")
 skeleton = NodePath("../..")
 
 [node name="primary_gun" type="Node3D" parent="player/pivot"]
-transform = Transform3D(0.999773, 0.0212914, 0, -0.0212914, 0.999773, 0, 0, 0, 1, -1.69077, -1.20623, -1.21651)
-visible = false
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.976615, -1.75102, -1.03855)
 
 [node name="gun_muzzle" type="Marker3D" parent="player/pivot/primary_gun"]
 transform = Transform3D(0.619466, -1.86265e-09, 0, -1.86265e-09, 0.597559, 0, 0, 0, 2.66141, 2.33069, 1.28175, -1.47271)
@@ -136,8 +93,27 @@ transform = Transform3D(0.619466, -3.72529e-09, 0, -9.31323e-10, 0.597559, 0, 0,
 mesh = SubResource("BoxMesh_kyqiw")
 
 [node name="Camera3D" type="Camera3D" parent="player/pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.879951, -0.567114)
 current = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="player"]
-shape = SubResource("CapsuleShape3D_qbkls")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.751554, 0)
+shape = SubResource("CapsuleShape3D_gntrk")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="Control" type="Control" parent="CanvasLayer"]
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+mouse_force_pass_scroll_events = false
+script = ExtResource("4_dewec")
