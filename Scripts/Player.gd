@@ -2,7 +2,7 @@ extends CharacterBody3D
 
 #NODES RELATION
 @onready var pivot = $pivot
-@onready var mesh = $"."
+@onready var mesh = $"."   # keep but no scaling for crouch
 @onready var primary_gun = $pivot/primary_gun
 @onready var secondary_gun = $pivot/secondary_gun
 @onready var p_muzzle = $pivot/primary_gun/gun_muzzle
@@ -28,12 +28,15 @@ extends CharacterBody3D
 #OTHER VARIABLES
 var rotation_x := 0.0
 var is_crouching = false
-var crouch_scale = Vector3(1, 0.6, 1)
-var normal_scale = Vector3(1, 1, 1)
-var crouch_scale_speed = 10.0
 var current_speed = 0.0
 var is_primary = true
 var muzzle = null
+
+# CROUCH SYSTEM (camera & gun offset)
+var stand_cam_y = 0.0
+var crouch_cam_y = -0.4
+var stand_pivot_y = 0.0
+var crouch_pivot_y = -0.25
 
 # HEAD BOB VARIABLES
 var bob_time := 0.0
@@ -50,8 +53,15 @@ func _ready() -> void:
 	primary_gun.show()
 	secondary_gun.hide()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
 	muzzle = p_muzzle
 	original_cam_pos = cam.position
+
+	stand_cam_y = cam.transform.origin.y
+	crouch_cam_y = stand_cam_y - 0.4
+
+	stand_pivot_y = pivot.position.y
+	crouch_pivot_y = stand_pivot_y - 0.25
 
 
 func _physics_process(delta: float) -> void:
@@ -65,9 +75,7 @@ func _physics_process(delta: float) -> void:
 	apply_movement(delta)
 	apply_gravity(delta)
 	apply_head_bob(delta)
-
-	var target_scale = crouch_scale if is_crouching else normal_scale
-	mesh.scale = mesh.scale.lerp(target_scale, crouch_scale_speed * delta)
+	apply_crouch_offsets(delta) 
 
 	move_and_slide()
 
@@ -120,6 +128,22 @@ func apply_movement(delta: float) -> void:
 	velocity.z = horizontal.z
 
 
+# CROUCH CAMERA + GUN OFFSET
+func apply_crouch_offsets(delta):
+	var target_cam_y = crouch_cam_y if is_crouching else stand_cam_y
+	var cam_pos = cam.transform.origin
+	cam_pos.y = lerp(cam_pos.y, target_cam_y, delta * 10)
+
+	var min_cam_y = stand_cam_y - 0.3
+	var max_cam_y = stand_cam_y
+	cam_pos.y = clamp(cam_pos.y, min_cam_y, max_cam_y)
+
+	cam.transform.origin = cam_pos
+
+	var target_pivot_y = crouch_pivot_y if is_crouching else stand_pivot_y
+	pivot.position.y = lerp(pivot.position.y, target_pivot_y, delta * 10)
+
+
 # GUN SWITCH
 func gun_switch():
 	if Input.is_action_just_pressed("switch"):
@@ -135,34 +159,46 @@ func gun_switch():
 			muzzle = s_muzzle
 
 
-# AIM POINT SYSTEM (SCREEN CENTER)
-func get_aim_point():
+# CAMERA AIM RAYCAST (SCREEN CENTER)
+func get_aim_target():
 	var vp = get_viewport().get_visible_rect().size * 0.5
-
-	var from = cam.project_ray_origin(vp)
+	var origin = cam.project_ray_origin(vp)
 	var dir = cam.project_ray_normal(vp)
-	var to = from + dir * max_aim_distance
+	var end_pos = origin + dir * max_aim_distance
 
-	var result = get_world_3d().direct_space_state.intersect_ray(
-		PhysicsRayQueryParameters3D.create(from, to)
+	var hit = get_world_3d().direct_space_state.intersect_ray(
+		PhysicsRayQueryParameters3D.create(origin, end_pos)
 	)
 
-	return result.position if result else to
+	return hit.position if hit else end_pos
 
 
 # SHOOTING MECHANISM
 func shoot():
-	if Input.is_action_just_pressed("shoot"):
-		var aim_point = get_aim_point()
+	if not Input.is_action_just_pressed("shoot"):
+		return
 
-		var muzzle_pos = muzzle.get_global_position()
-		var dir = (aim_point - muzzle_pos).normalized()
+	var vp = get_viewport().get_visible_rect().size * 0.5
 
-		var bullet = Bullet_Scene.instantiate()
-		bullet.direction = dir
-		bullet.transform.origin = muzzle_pos
+	var cam_from = cam.project_ray_origin(vp)
+	var cam_dir = cam.project_ray_normal(vp)
 
-		get_tree().current_scene.add_child(bullet)
+	var cam_to = cam_from + cam_dir * max_aim_distance
+	var hit = get_world_3d().direct_space_state.intersect_ray(
+		PhysicsRayQueryParameters3D.create(cam_from, cam_to)
+	)
+
+	var aim_target = hit.position if hit else cam_to
+
+	var muzzle_pos = muzzle.global_position
+
+	var bullet_dir = (aim_target - muzzle_pos).normalized()
+
+	var bullet = Bullet_Scene.instantiate()
+	bullet.direction = bullet_dir
+	bullet.transform.origin = muzzle_pos
+	bullet.shooter = self
+	get_tree().current_scene.add_child(bullet)
 
 
 
@@ -180,10 +216,10 @@ func _unhandled_input(event):
 		rotation_x -= event.relative.y * mouse_sensitivity * 0.01
 		rotation_x = clamp(rotation_x, deg_to_rad(-75), deg_to_rad(75)) 
 
-		var gun_rot_x = clamp(rotation_x, deg_to_rad(-35), deg_to_rad(75))
-
-		pivot.rotation.x = gun_rot_x
+		pivot.rotation.x = rotation_x
 		
+
+# HEAD BOB 
 func apply_head_bob(delta):
 	if state == PlayerState.AIR:
 		cam.position = cam.position.lerp(original_cam_pos, delta * 10)
