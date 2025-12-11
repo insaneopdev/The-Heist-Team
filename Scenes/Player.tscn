@@ -28,8 +28,8 @@ albedo_texture_msdf = true
 material = SubResource("StandardMaterial3D_5ixxa")
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gntrk"]
-radius = 1.10779
-height = 5.0016
+radius = 1.40078
+height = 4.16023
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_nn08x"]
 properties/0/path = NodePath(".:position")
@@ -86,6 +86,10 @@ mesh = SubResource("BoxMesh_kyqiw")
 [node name="Camera3D" type="Camera3D" parent="pivot"]
 current = true
 
+[node name="RayCast3D" type="RayCast3D" parent="pivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.019814, 1.41341)
+target_position = Vector3(0, 0, -7)
+
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.751554, 0)
 shape = SubResource("CapsuleShape3D_gntrk")
@@ -108,6 +112,12 @@ grow_vertical = 2
 mouse_filter = 2
 mouse_force_pass_scroll_events = false
 script = ExtResource("4_dewec")
+
+[node name="MoneyLabel" type="Label" parent="CanvasLayer"]
+offset_left = 990.0
+offset_top = 17.0
+offset_right = 1128.0
+offset_bottom = 53.0
 
 [node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_nn08x")

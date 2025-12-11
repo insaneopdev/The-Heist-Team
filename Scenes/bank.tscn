@@ -1,8 +1,10 @@
-[gd_scene load_steps=9 format=3 uid="uid://bhgru07juc6i7"]
+[gd_scene load_steps=11 format=3 uid="uid://bhgru07juc6i7"]
 
 [ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
 [ext_resource type="Script" uid="uid://dxwxg13hold0v" path="res://Scripts/bank.gd" id="1_mgqks"]
 [ext_resource type="PackedScene" uid="uid://deu6j6pxha5bv" path="res://Scenes/Player.tscn" id="2_cf7ns"]
+[ext_resource type="PackedScene" uid="uid://bxmtoty58yacp" path="res://Scenes/vault.tscn" id="4_h8m3o"]
+[ext_resource type="PackedScene" uid="uid://doqnj4m8dlerm" path="res://Scenes/money.tscn" id="5_poatj"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_cf7ns"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -68,5 +70,38 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.7151, 0, 4.55835)
 
 [node name="Marker3D5" type="Marker3D" parent="SpawnPoints"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32.9986, 0, 4.55835)
+
+[node name="Vault" parent="." instance=ExtResource("4_h8m3o")]
+transform = Transform3D(-2.18557e-08, 0, -0.5, 0, 0.5, 0, 0.5, 0, -2.18557e-08, -6.25502, 0.693716, -8.86741)
+
+[node name="Vault2" parent="." instance=ExtResource("4_h8m3o")]
+transform = Transform3D(-2.18557e-08, 0, -0.5, 0, 0.5, 0, 0.5, 0, -2.18557e-08, -4.99481, 0.693716, -8.86741)
+
+[node name="Vault3" parent="." instance=ExtResource("4_h8m3o")]
+transform = Transform3D(-2.18557e-08, 0, -0.5, 0, 0.5, 0, 0.5, 0, -2.18557e-08, -3.60195, 0.693716, -8.86741)
+
+[node name="Money" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.47825, 0.955883, 0)
+
+[node name="Money2" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.99833, 0.955883, 0)
+
+[node name="Money8" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.46365, 1.64235, 0)
+
+[node name="Money3" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 0.955883, -0.998071)
+
+[node name="Money4" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 0.955883, -6.07247)
+
+[node name="Money5" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 1.64274, -6.07247)
+
+[node name="Money6" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 1.64274, -8.43284)
+
+[node name="Money7" parent="." instance=ExtResource("5_poatj")]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 1.64274, -3.50797)
 
 [editable path="bank"]

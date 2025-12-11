@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3 uid="uid://doqnj4m8dlerm"]
+
+[ext_resource type="Script" uid="uid://dhv8nfccd4tp6" path="res://Scripts/money.gd" id="1_63yw1"]
+[ext_resource type="PackedScene" uid="uid://d2tn6nt8j5gsw" path="res://Assets/Models/Cash/scene.gltf" id="1_no3si"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_63yw1"]
+size = Vector3(1.27197, 0.553711, 0.882813)
+
+[node name="Money" type="StaticBody3D" groups=["money"]]
+script = ExtResource("1_63yw1")
+
+[node name="cash" parent="." instance=ExtResource("1_no3si")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0495605, 0.223145, -0.0439161)
+shape = SubResource("BoxShape3D_63yw1")

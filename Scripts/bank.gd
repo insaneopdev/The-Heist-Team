@@ -1,6 +1,8 @@
 extends Node3D
 
 @export var player_scene : PackedScene
+@onready var spawn_points := $SpawnPoints.get_children()
+
 
 func _ready():
 	# Spawn self
@@ -17,11 +19,22 @@ func _ready():
 func spawn_player(id):
 	var p = player_scene.instantiate()
 	p.name = str(id)
-	# Add Spawn Point Logic here...
-	p.position = Vector3(0, 5, 0) 
+
+	var spawn_pos = get_spawn_point()
+	p.position = spawn_pos
+
 	add_child(p)
 
 func remove_player(id):
 	if has_node(str(id)):
 		get_node(str(id)).queue_free()
 		print("Player " + str(id) + " removed from scene.")
+		
+func get_spawn_point() -> Vector3:
+	if spawn_points.size() == 0:
+		push_error("No spawn points found!")
+		return Vector3.ZERO
+
+	# Random spawn point
+	var sp = spawn_points[randi() % spawn_points.size()]
+	return sp.global_position

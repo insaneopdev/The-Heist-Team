@@ -8,6 +8,8 @@ extends CharacterBody3D
 @onready var p_muzzle = $pivot/primary_gun/gun_muzzle
 @onready var s_muzzle = $pivot/secondary_gun/gun_muzzle
 @onready var cam = $pivot/Camera3D
+@onready var raycast = $pivot/RayCast3D
+@onready var money = $CanvasLayer/MoneyLabel
 
 # --- SCENE ---
 @export var Bullet_Scene : PackedScene
@@ -55,6 +57,9 @@ func _enter_tree():
 	set_multiplayer_authority(str(name).to_int())
 
 func _ready() -> void:
+	
+	money.text = str("Team Take: $0")
+	GameManager.money_updated.connect(update_display)
 	# If this player doesn't belong to this computer, disable controls and camera
 	if not is_multiplayer_authority():
 		cam.current = false
@@ -83,6 +88,13 @@ func _physics_process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("crouch"):
 		is_crouching = !is_crouching
+
+	if Input.is_action_just_pressed("plant"):
+		if raycast.is_colliding():
+			if raycast.get_collider().is_in_group("vault"):
+				raycast.get_collider().plant()
+			if raycast.get_collider().is_in_group("money"):
+				raycast.get_collider().loot()
 
 	update_state()
 	apply_state_effects(delta)
@@ -265,3 +277,6 @@ func apply_head_bob(delta):
 	)
 
 	cam.position = original_cam_pos + bob_offset
+
+func update_display(amount):
+	money.text = "TEAM CASH: $" + str(amount)
