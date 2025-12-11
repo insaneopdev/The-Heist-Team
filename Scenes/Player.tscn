@@ -32,8 +32,8 @@ material = SubResource("StandardMaterial3D_5ixxa")
 size = Vector3(0.3, 0.3, 1.6)
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gntrk"]
-radius = 0.801374
-height = 2.86416
+radius = 0.892379
+height = 2.88504
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_nn08x"]
 properties/0/path = NodePath(".:position")
@@ -46,7 +46,7 @@ properties/2/path = NodePath(".:scale")
 properties/2/spawn = true
 properties/2/replication_mode = 1
 
-[node name="player" type="CharacterBody3D"]
+[node name="player" type="CharacterBody3D" groups=["player"]]
 collision_layer = 3
 collision_mask = 3
 script = ExtResource("1_rpqav")
@@ -59,7 +59,7 @@ transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 
 transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
 
 [node name="pivot" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.95198)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.29308)
 
 [node name="secondary_gun" type="Node3D" parent="pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.04179, -0.394461, -0.96715)
@@ -88,7 +88,7 @@ transform = Transform3D(1, 1.50343e-09, 0, -1.50343e-09, 1, 0, 0, 0, 1, 1.80717,
 mesh = SubResource("BoxMesh_kyqiw")
 
 [node name="Camera3D" type="Camera3D" parent="pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.000675917, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.000675917, 0.606668)
 current = true
 
 [node name="RayCast3D" type="RayCast3D" parent="pivot"]

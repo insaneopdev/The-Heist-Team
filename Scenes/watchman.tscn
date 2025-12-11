@@ -1,5 +1,55 @@
-[gd_scene format=3 uid="uid://cj2n83ebt73wl"]
+[gd_scene load_steps=7 format=3 uid="uid://cj2n83ebt73wl"]
+
+[ext_resource type="Script" uid="uid://dsbrssqtytso4" path="res://Scripts/watchman.gd" id="1_tew0q"]
+[ext_resource type="PackedScene" uid="uid://dwu1d3yy64sl2" path="res://Assets/Player/bean.glb" id="2_lc3sm"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_58rv1"]
+radius = 0.801374
+height = 2.86416
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_7i7p6"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dewec"]
+shading_mode = 0
+albedo_color = Color(1, 1, 0.172549, 1)
+albedo_texture = SubResource("NoiseTexture2D_7i7p6")
+albedo_texture_msdf = true
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_w3tkn"]
+material = SubResource("StandardMaterial3D_dewec")
+radius = 0.2
+radial_segments = 6
+rings = 2
 
 [node name="Watchman" type="CharacterBody3D"]
+script = ExtResource("1_tew0q")
+
+[node name="mesh" type="Node3D" parent="."]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
+
+[node name="bean" parent="mesh" instance=ExtResource("2_lc3sm")]
+transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.358074, 0)
+shape = SubResource("CapsuleShape3D_58rv1")
+
+[node name="pivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.95198)
+
+[node name="secondary_gun" type="Node3D" parent="pivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.04179, -0.394461, -0.96715)
+
+[node name="gun_muzzle" type="Marker3D" parent="pivot/secondary_gun"]
+transform = Transform3D(0.525698, -0.00554633, -1.66543e-10, 0, -3.91289e-08, 0.614935, -0.00325722, -0.895147, -2.68791e-08, -0.3197, 0.0945348, -0.219271)
+
+[node name="body" type="Node3D" parent="pivot/secondary_gun"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="pivot/secondary_gun/body"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -0.359545, 0.0636252, 0.7728)
+mesh = SubResource("CapsuleMesh_w3tkn")
+skeleton = NodePath("../..")
+
+[node name="VisionRay" type="RayCast3D" parent="pivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.019814, 1.41341)
+target_position = Vector3(0, 0, -7)
