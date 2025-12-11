@@ -27,7 +27,6 @@ func _physics_process(delta):
 	var result = space_state.intersect_ray(query)
 
 	if result:
-		
 		queue_free()
 		return
 

@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://bhgru07juc6i7"]
+[gd_scene load_steps=14 format=3 uid="uid://bhgru07juc6i7"]
 
 [ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
 [ext_resource type="Script" uid="uid://dxwxg13hold0v" path="res://Scripts/bank.gd" id="1_mgqks"]
@@ -21,6 +21,15 @@ tonemap_mode = 2
 ssao_enabled = true
 glow_enabled = true
 
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_wuoyq"]
+points = PackedVector3Array(0.998486, -6.93889e-18, 0.998486, -1.01587, -0.125848, -1.01587, -1.01587, -0.125848, 1.01587, 1.01587, -0.125848, -1.01587, -0.998486, -6.93889e-18, -0.998486, 1.01587, -0.125848, 1.01587, -0.998486, -6.93889e-18, 0.998486, 0.998486, -6.93889e-18, -0.998486)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_2qj2k"]
+points = PackedVector3Array(0.998486, -6.93889e-18, 0.998486, -1.01587, -0.125848, -1.01587, -1.01587, -0.125848, 1.01587, 1.01587, -0.125848, -1.01587, -0.998486, -6.93889e-18, -0.998486, 1.01587, -0.125848, 1.01587, -0.998486, -6.93889e-18, 0.998486, 0.998486, -6.93889e-18, -0.998486)
+
+[sub_resource type="ConvexPolygonShape3D" id="ConvexPolygonShape3D_poatj"]
+points = PackedVector3Array(0.99991, -1.06324, -1.03135, 1.06349, -0.936757, 3.03175, 1.06349, 1.03135, 1.06304, -1.03163, -0.936757, 3.03175, -1, 0.970006, -0.97, -1.03163, -3.03135, 0.936962, 1, -2.90861, 2.909, 1.06328, -3.03135, 0.936962, -1.03163, 1.03135, 1.06304, -1, -2.97001, 2.9704, -1.03163, -1.06285, -1.03135, 1, 0.908241, -0.908229, 1.06349, -1.06324, -1.03135)
+
 [sub_resource type="BoxMesh" id="BoxMesh_mgqks"]
 size = Vector3(100, 1, 100)
 
@@ -40,8 +49,23 @@ shadow_enabled = true
 
 [node name="bank" parent="." instance=ExtResource("1_4wep6")]
 
+[node name="StaticBody3D" type="StaticBody3D" parent="bank/Plane" index="0"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Plane/StaticBody3D"]
+shape = SubResource("ConvexPolygonShape3D_wuoyq")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="bank/Plane_001" index="0"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Plane_001/StaticBody3D"]
+shape = SubResource("ConvexPolygonShape3D_2qj2k")
+
 [node name="Cylinder_001" parent="bank" index="17"]
 transform = Transform3D(-1.9256e-07, 0.338515, 0, -1.18193, -5.51511e-08, 0, 0, 0, 1.18193, -0.626714, 1.697, -6.82081)
+
+[node name="StaticBody3D" type="StaticBody3D" parent="bank/Cube_019" index="0"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Cube_019/StaticBody3D"]
+shape = SubResource("ConvexPolygonShape3D_poatj")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="."]
 
