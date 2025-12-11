@@ -1,12 +1,72 @@
-[gd_scene load_steps=2 format=3 uid="uid://bhgru07juc6i7"]
+[gd_scene load_steps=9 format=3 uid="uid://bhgru07juc6i7"]
 
 [ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
+[ext_resource type="Script" uid="uid://dxwxg13hold0v" path="res://Scripts/bank.gd" id="1_mgqks"]
+[ext_resource type="PackedScene" uid="uid://deu6j6pxha5bv" path="res://Scenes/Player.tscn" id="2_cf7ns"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_cf7ns"]
+sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+ground_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
+energy_multiplier = 2.6
+
+[sub_resource type="Sky" id="Sky_mgqks"]
+sky_material = SubResource("ProceduralSkyMaterial_cf7ns")
+
+[sub_resource type="Environment" id="Environment_h8m3o"]
+background_mode = 2
+sky = SubResource("Sky_mgqks")
+tonemap_mode = 2
+ssao_enabled = true
+glow_enabled = true
+
+[sub_resource type="BoxMesh" id="BoxMesh_mgqks"]
+size = Vector3(100, 1, 100)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_h8m3o"]
+size = Vector3(100, 1, 100)
 
 [node name="Bank" type="Node3D"]
+script = ExtResource("1_mgqks")
+player_scene = ExtResource("2_cf7ns")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_h8m3o")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -0.500003, 0.749999, -0.43301, 0, 0, 0)
+shadow_enabled = true
 
 [node name="bank" parent="." instance=ExtResource("1_4wep6")]
 
 [node name="Cylinder_001" parent="bank" index="17"]
 transform = Transform3D(-1.9256e-07, 0.338515, 0, -1.18193, -5.51511e-08, 0, 0, 0, 1.18193, -0.626714, 1.697, -6.82081)
+
+[node name="StaticBody3D" type="StaticBody3D" parent="."]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.57265, 0)
+mesh = SubResource("BoxMesh_mgqks")
+skeleton = NodePath("")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.57265, 0)
+shape = SubResource("BoxShape3D_h8m3o")
+
+[node name="SpawnPoints" type="Node3D" parent="."]
+
+[node name="Marker3D" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.9805, 0, 0)
+
+[node name="Marker3D2" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 0)
+
+[node name="Marker3D3" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0, 4.55835)
+
+[node name="Marker3D4" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 26.7151, 0, 4.55835)
+
+[node name="Marker3D5" type="Marker3D" parent="SpawnPoints"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 32.9986, 0, 4.55835)
 
 [editable path="bank"]

@@ -11,9 +11,13 @@ config_version=5
 [application]
 
 config/name="The Heist Team"
-run/main_scene="uid://deu6j6pxha5bv"
+run/main_scene="uid://hxlsbetdsvi6"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+NetworkManager="*res://Scripts/NetworkManager.gd"
 
 [input]
 

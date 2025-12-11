@@ -1,0 +1,68 @@
+[gd_scene load_steps=2 format=3 uid="uid://hxlsbetdsvi6"]
+
+[ext_resource type="Script" uid="uid://bn1xly6ekjy0v" path="res://Scripts/lobby.gd" id="1_nvaej"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_nvaej")
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PanelContainer"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+text = "The Heist Team"
+
+[node name="NameInput" type="LineEdit" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+placeholder_text = "Enter name"
+
+[node name="Button" type="Button" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+text = "Connect to Server"
+
+[node name="HSeparator" type="HSeparator" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CodeInput" type="LineEdit" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+placeholder_text = "CodeInput"
+
+[node name="HBoxContainer" type="HBoxContainer" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="CreateBtn" type="Button" parent="PanelContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "Create Room"
+
+[node name="JoinBtn" type="Button" parent="PanelContainer/VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "Join Room"
+
+[node name="StartBtn" type="Button" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+text = "Start"
+
+[node name="StatusLabel" type="Label" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayerListLabel" type="Label" parent="PanelContainer/VBoxContainer"]
+layout_mode = 2
+
+[connection signal="pressed" from="PanelContainer/VBoxContainer/Button" to="." method="_on_button_pressed"]
+[connection signal="pressed" from="PanelContainer/VBoxContainer/HBoxContainer/CreateBtn" to="." method="_on_create_btn_pressed"]
+[connection signal="pressed" from="PanelContainer/VBoxContainer/HBoxContainer/JoinBtn" to="." method="_on_join_btn_pressed"]
+[connection signal="pressed" from="PanelContainer/VBoxContainer/StartBtn" to="." method="_on_start_btn_pressed"]

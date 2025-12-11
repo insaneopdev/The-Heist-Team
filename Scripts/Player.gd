@@ -1,55 +1,67 @@
 extends CharacterBody3D
 
-#NODES RELATION
+# --- NODES RELATION ---
 @onready var pivot = $pivot
-@onready var mesh = $"."   # keep but no scaling for crouch
+@onready var mesh = $"." 
 @onready var primary_gun = $pivot/primary_gun
 @onready var secondary_gun = $pivot/secondary_gun
 @onready var p_muzzle = $pivot/primary_gun/gun_muzzle
 @onready var s_muzzle = $pivot/secondary_gun/gun_muzzle
 @onready var cam = $pivot/Camera3D
 
-#SCENE
+# --- SCENE ---
 @export var Bullet_Scene : PackedScene
 
-# PLAYER VARIABLES 
+# --- PLAYER VARIABLES ---
 @export var walk_speed = 5.0
 @export var sprint_speed = 8.0
 @export var jump_height = 10.0
 @export var crouch_speed = 3.0
 
-#SYSTEM VARIABLES
+# --- SYSTEM VARIABLES ---
 @export var mouse_sensitivity := 0.2
 @export var max_aim_distance := 1000.0
 
-# ENVIRONMENT VARIABLES
-@export var gravity = 20.0
+# --- ENVIRONMENT VARIABLES ---
+@export var gravity : float = 20.0
 
-#OTHER VARIABLES
+# --- OTHER VARIABLES ---
 var rotation_x := 0.0
 var is_crouching = false
 var current_speed = 0.0
 var is_primary = true
 var muzzle = null
 
-# CROUCH SYSTEM (camera & gun offset)
+# --- CROUCH SYSTEM (camera & gun offset) ---
 var stand_cam_y = 0.0
 var crouch_cam_y = -0.4
 var stand_pivot_y = 0.0
 var crouch_pivot_y = -0.25
 
-# HEAD BOB VARIABLES
+# --- HEAD BOB VARIABLES ---
 var bob_time := 0.0
 var bob_amount := 0.1         
-var bob_speed := 10.0           
+var bob_speed := 10.0            
 var original_cam_pos = null
 
-#STATE MACHINE
+# --- STATE MACHINE ---
 enum PlayerState { IDLE, WALK, RUN, CROUCH, AIR }
 var state : PlayerState = PlayerState.IDLE
 
 
+# --- MULTIPLAYER SETUP ---
+func _enter_tree():
+	# Set authority based on the node name (which will be the player ID)
+	set_multiplayer_authority(str(name).to_int())
+
 func _ready() -> void:
+	# If this player doesn't belong to this computer, disable controls and camera
+	if not is_multiplayer_authority():
+		cam.current = false
+		set_process_unhandled_input(false)
+		return
+
+	# Logic for YOUR player only
 	primary_gun.show()
 	secondary_gun.hide()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
@@ -65,6 +77,10 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	# STOP if this is not my player
+	if not is_multiplayer_authority():
+		return
+
 	if Input.is_action_just_pressed("crouch"):
 		is_crouching = !is_crouching
 
@@ -80,7 +96,7 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
-#STATE MACHINE 
+# --- STATE MACHINE ---
 func update_state() -> void:
 	if not is_on_floor():
 		state = PlayerState.AIR
@@ -98,7 +114,7 @@ func update_state() -> void:
 		state = PlayerState.IDLE
 
 
-#STATE EFFECTS  
+# --- STATE EFFECTS ---
 func apply_state_effects(_delta: float) -> void:
 	match state:
 		PlayerState.IDLE, PlayerState.WALK:
@@ -111,7 +127,7 @@ func apply_state_effects(_delta: float) -> void:
 			pass
 
 
-# MOVEMENT 
+# --- MOVEMENT ---
 func apply_movement(delta: float) -> void:
 	var input = Input.get_vector("left", "right", "forward", "backward")
 	var direction = (transform.basis * Vector3(input.x, 0, input.y)).normalized()
@@ -128,7 +144,7 @@ func apply_movement(delta: float) -> void:
 	velocity.z = horizontal.z
 
 
-# CROUCH CAMERA + GUN OFFSET
+# --- CROUCH CAMERA + GUN OFFSET ---
 func apply_crouch_offsets(delta):
 	var target_cam_y = crouch_cam_y if is_crouching else stand_cam_y
 	var cam_pos = cam.transform.origin
@@ -144,7 +160,7 @@ func apply_crouch_offsets(delta):
 	pivot.position.y = lerp(pivot.position.y, target_pivot_y, delta * 10)
 
 
-# GUN SWITCH
+# --- GUN SWITCH ---
 func gun_switch():
 	if Input.is_action_just_pressed("switch"):
 		is_primary = !is_primary
@@ -159,57 +175,52 @@ func gun_switch():
 			muzzle = s_muzzle
 
 
-# CAMERA AIM RAYCAST (SCREEN CENTER)
-func get_aim_target():
-	var vp = get_viewport().get_visible_rect().size * 0.5
-	var origin = cam.project_ray_origin(vp)
-	var dir = cam.project_ray_normal(vp)
-	var end_pos = origin + dir * max_aim_distance
-
-	var hit = get_world_3d().direct_space_state.intersect_ray(
-		PhysicsRayQueryParameters3D.create(origin, end_pos)
-	)
-
-	return hit.position if hit else end_pos
-
-
-# SHOOTING MECHANISM
+# --- SHOOTING (MULTIPLAYER) ---
 func shoot():
 	if not Input.is_action_just_pressed("shoot"):
 		return
 
+	# 1. Calculate trajectory locally
 	var vp = get_viewport().get_visible_rect().size * 0.5
-
 	var cam_from = cam.project_ray_origin(vp)
 	var cam_dir = cam.project_ray_normal(vp)
 
 	var cam_to = cam_from + cam_dir * max_aim_distance
+	
+	# Raycast to find what we are looking at
 	var hit = get_world_3d().direct_space_state.intersect_ray(
 		PhysicsRayQueryParameters3D.create(cam_from, cam_to)
 	)
 
 	var aim_target = hit.position if hit else cam_to
-
 	var muzzle_pos = muzzle.global_position
-
 	var bullet_dir = (aim_target - muzzle_pos).normalized()
 
+	# 2. Tell everyone (including myself) to spawn the bullet
+	rpc("spawn_bullet", muzzle_pos, bullet_dir)
+
+# This function runs on EVERYONE'S computer when called
+@rpc("call_local", "any_peer") 
+func spawn_bullet(pos: Vector3, dir: Vector3):
 	var bullet = Bullet_Scene.instantiate()
-	bullet.direction = bullet_dir
-	bullet.transform.origin = muzzle_pos
-	bullet.shooter = self
-	get_tree().current_scene.add_child(bullet)
+	bullet.transform.origin = pos
+	bullet.direction = dir
+	
+	# Note: We don't set 'shooter = self' here because 'self' is different on every PC.
+	# If you need to know who shot, pass the player ID in the RPC.
+	
+	get_tree().root.add_child(bullet)
 
 
-
-#GRAVITY 
+# --- GRAVITY ---
 func apply_gravity(delta):
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
 
-# MOUSE ROTATION
+# --- MOUSE ROTATION ---
 func _unhandled_input(event):
+	# (Input is already disabled in _ready for non-local players, so we just run logic)
 	if event is InputEventMouseMotion:
 		rotate_y(-event.relative.x * mouse_sensitivity * 0.01)
 
@@ -219,7 +230,7 @@ func _unhandled_input(event):
 		pivot.rotation.x = rotation_x
 		
 
-# HEAD BOB 
+# --- HEAD BOB ---
 func apply_head_bob(delta):
 	if state == PlayerState.AIR:
 		cam.position = cam.position.lerp(original_cam_pos, delta * 10)
