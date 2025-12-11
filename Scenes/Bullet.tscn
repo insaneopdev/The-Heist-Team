@@ -1,0 +1,33 @@
+[gd_scene load_steps=7 format=3 uid="uid://cxmb6kgysuomn"]
+
+[ext_resource type="Script" uid="uid://dv4nwyg6jrir0" path="res://Scripts/Bullet.gd" id="1_vlxeq"]
+[ext_resource type="PackedScene" uid="uid://cayxxtud0mmvd" path="res://Scenes/Wall_impact.tscn" id="2_14k46"]
+
+[sub_resource type="Texture2DRD" id="Texture2DRD_vlxeq"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_14k46"]
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 1)
+albedo_texture = SubResource("Texture2DRD_vlxeq")
+albedo_texture_msdf = true
+
+[sub_resource type="SphereMesh" id="SphereMesh_qvus8"]
+material = SubResource("StandardMaterial3D_14k46")
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_nr8tw"]
+radius = 0.507479
+
+[node name="bullet" type="Area3D"]
+collision_layer = 4
+collision_mask = 4
+script = ExtResource("1_vlxeq")
+impact_scene = ExtResource("2_14k46")
+
+[node name="bullet" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.605, 0, 0, 0, 0.5, 0, 0, 0, 0.605, 0, 0, 0)
+mesh = SubResource("SphereMesh_qvus8")
+skeleton = NodePath("")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 0, 0, 0)
+shape = SubResource("SphereShape3D_nr8tw")
