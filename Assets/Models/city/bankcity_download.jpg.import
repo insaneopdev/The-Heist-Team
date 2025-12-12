@@ -1,0 +1,38 @@
+[remap]
+
+importer="texture"
+type="CompressedTexture2D"
+uid="uid://pk6ak7h6p55y"
+path.s3tc="res://.godot/imported/bankcity_download.jpg-6b5bce1f52a408b4fca2c5808a4c168c.s3tc.ctex"
+metadata={
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
+}
+generator_parameters={
+"md5": "b05fae62f2b8435255b2ca0485e35ec2"
+}
+
+[deps]
+
+source_file="res://Assets/Models/city/bankcity_download.jpg"
+dest_files=["res://.godot/imported/bankcity_download.jpg-6b5bce1f52a408b4fca2c5808a4c168c.s3tc.ctex"]
+
+[params]
+
+compress/mode=2
+compress/high_quality=false
+compress/lossy_quality=0.7
+compress/hdr_compression=1
+compress/normal_map=0
+compress/channel_pack=0
+mipmaps/generate=true
+mipmaps/limit=-1
+roughness/mode=0
+roughness/src_normal=""
+process/fix_alpha_border=true
+process/premult_alpha=false
+process/normal_map_invert_y=false
+process/hdr_as_srgb=false
+process/hdr_clamp_exposure=false
+process/size_limit=0
+detect_3d/compress_to=0
