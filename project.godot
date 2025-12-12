@@ -25,6 +25,7 @@ GameManager="*res://Scripts/GameManager.gd"
 vault=""
 money=""
 player=""
+enemy=""
 
 [input]
 

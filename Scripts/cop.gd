@@ -8,7 +8,7 @@ extends CharacterBody3D
 
 
 func _ready() -> void:
-	make_watchman_dress()  
+	make_cop_dress()  
 
 
 func _physics_process(delta: float) -> void:
@@ -18,14 +18,12 @@ func _physics_process(delta: float) -> void:
 # -----------------------
 # COP UNIFORM FUNCTION
 # -----------------------
-func make_watchman_dress() -> void:
+func make_cop_dress() -> void:
 	var bean = $mesh/bean
 
-	_set_color(bean.get_node("Sphere"), Color(0.4, 0.6, 1.0))     # body light blue
-
-	_set_color(bean.get_node("Sphere_003"), Color(0.05, 0.05, 0.1)) # hat top dark
-	_set_color(bean.get_node("Torus"), Color(0, 0, 0))            # hat edge blac
-	
+	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))     # body
+	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3)) # hat top
+	_set_color(bean.get_node("Torus"), Color(0, 0, 0))            # hat edge
 
 
 # -----------------------

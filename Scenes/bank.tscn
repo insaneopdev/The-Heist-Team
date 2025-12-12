@@ -1,10 +1,12 @@
-[gd_scene load_steps=50 format=4 uid="uid://bhgru07juc6i7"]
+[gd_scene load_steps=53 format=4 uid="uid://bhgru07juc6i7"]
 
 [ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
 [ext_resource type="Script" uid="uid://dxwxg13hold0v" path="res://Scripts/bank.gd" id="1_mgqks"]
 [ext_resource type="PackedScene" uid="uid://deu6j6pxha5bv" path="res://Scenes/Player.tscn" id="2_cf7ns"]
 [ext_resource type="PackedScene" uid="uid://bxmtoty58yacp" path="res://Scenes/vault.tscn" id="4_h8m3o"]
 [ext_resource type="PackedScene" uid="uid://doqnj4m8dlerm" path="res://Scenes/money.tscn" id="5_poatj"]
+[ext_resource type="PackedScene" uid="uid://cj2n83ebt73wl" path="res://Scenes/watchman.tscn" id="6_2qj2k"]
+[ext_resource type="PackedScene" uid="uid://c0iliw0uqop5m" path="res://Scenes/cop.tscn" id="7_wuoyq"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_cf7ns"]
 sky_horizon_color = Color(0.662243, 0.671743, 0.686743, 1)
@@ -114,6 +116,9 @@ size = Vector3(212.451, 2.68713, 0.245178)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_vasma"]
 size = Vector3(2.94864, 2.76471, 15.05)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_h06s0"]
+size = Vector3(2.61279, 0.718384, 1.56781)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_3wn44"]
 size = Vector3(2.0094, 2.11557, 1.95947)
@@ -319,6 +324,10 @@ shape = SubResource("BoxShape3D_ywaob")
 [node name="Back_wall" type="CollisionShape3D" parent="bank/Cube_021/StaticBody3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 160.237, 0.00535583, 6.29784)
 shape = SubResource("BoxShape3D_vasma")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Cube_021/StaticBody3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -50.1382, 0.964265, 6.38851)
+shape = SubResource("BoxShape3D_h06s0")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="bank/Cube_022" index="0"]
 
@@ -622,5 +631,11 @@ light_color = Color(1, 1, 0.701961, 1)
 light_energy = 4.0
 spot_range = 6.0
 spot_angle = 89.99
+
+[node name="Watchman" parent="." instance=ExtResource("6_2qj2k")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.07588, 0.403361, 14.3291)
+
+[node name="Cop" parent="." instance=ExtResource("7_wuoyq")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.675, 0.403361, 14.3291)
 
 [editable path="bank"]
