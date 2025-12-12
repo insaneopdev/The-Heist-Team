@@ -4,6 +4,7 @@ extends Node3D
 @onready var spawn_points := $SpawnPoints.get_children()
 
 
+
 func _ready():
 	# Spawn self
 	spawn_player(multiplayer.get_unique_id())
@@ -19,7 +20,6 @@ func _ready():
 func spawn_player(id):
 	var p = player_scene.instantiate()
 	p.name = str(id)
-
 	var spawn_pos = get_spawn_point()
 	p.position = spawn_pos
 

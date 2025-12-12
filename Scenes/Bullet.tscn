@@ -1,7 +1,6 @@
-[gd_scene load_steps=7 format=3 uid="uid://cxmb6kgysuomn"]
+[gd_scene load_steps=6 format=3 uid="uid://cxmb6kgysuomn"]
 
 [ext_resource type="Script" uid="uid://dv4nwyg6jrir0" path="res://Scripts/Bullet.gd" id="1_vlxeq"]
-[ext_resource type="PackedScene" uid="uid://cayxxtud0mmvd" path="res://Scenes/Wall_impact.tscn" id="2_14k46"]
 
 [sub_resource type="Texture2DRD" id="Texture2DRD_vlxeq"]
 
@@ -21,7 +20,6 @@ radius = 0.507479
 collision_layer = 4
 collision_mask = 4
 script = ExtResource("1_vlxeq")
-impact_scene = ExtResource("2_14k46")
 
 [node name="bullet" type="MeshInstance3D" parent="."]
 transform = Transform3D(0.605, 0, 0, 0, 0.5, 0, 0, 0, 0.605, 0, 0, 0)

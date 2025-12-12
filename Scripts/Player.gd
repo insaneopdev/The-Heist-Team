@@ -53,28 +53,27 @@ var state : PlayerState = PlayerState.IDLE
 
 # --- MULTIPLAYER SETUP ---
 func _enter_tree():
-	# Set authority based on the node name (which will be the player ID)
 	set_multiplayer_authority(str(name).to_int())
 
 func _ready() -> void:
 	
 	money.text = str("Team Take: $0")
 	GameManager.money_updated.connect(update_display)
-	# If this player doesn't belong to this computer, disable controls and camera
+
 	if not is_multiplayer_authority():
 		cam.current = false
 		set_process_unhandled_input(false)
 		return
 
-	# Logic for YOUR player only
 	primary_gun.show()
 	secondary_gun.hide()
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 	muzzle = p_muzzle
-	original_cam_pos = cam.position
 
-	stand_cam_y = cam.transform.origin.y
+	# CROUCH FIX: store correct camera + pivot base values
+	original_cam_pos = cam.position
+	stand_cam_y = cam.position.y
 	crouch_cam_y = stand_cam_y - 0.4
 
 	stand_pivot_y = pivot.position.y
@@ -82,7 +81,6 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	# STOP if this is not my player
 	if not is_multiplayer_authority():
 		return
 
@@ -95,6 +93,7 @@ func _physics_process(delta: float) -> void:
 				raycast.get_collider().plant()
 			if raycast.get_collider().is_in_group("money"):
 				raycast.get_collider().loot()
+			
 
 	update_state()
 	apply_state_effects(delta)
@@ -103,7 +102,7 @@ func _physics_process(delta: float) -> void:
 	apply_movement(delta)
 	apply_gravity(delta)
 	apply_head_bob(delta)
-	apply_crouch_offsets(delta) 
+	apply_crouch_offsets(delta)
 
 	move_and_slide()
 
@@ -156,20 +155,20 @@ func apply_movement(delta: float) -> void:
 	velocity.z = horizontal.z
 
 
-# --- CROUCH CAMERA + GUN OFFSET ---
+# ------------------------------------------------------
+# CROUCH SYSTEM FIXED (Smooth, No Snapping)
+# ------------------------------------------------------
 func apply_crouch_offsets(delta):
-	var target_cam_y = crouch_cam_y if is_crouching else stand_cam_y
-	var cam_pos = cam.transform.origin
-	cam_pos.y = lerp(cam_pos.y, target_cam_y, delta * 10)
+	var target_cam_y = (stand_cam_y - 0.4) if is_crouching else stand_cam_y
+	var target_pivot_y = (stand_pivot_y - 0.25) if is_crouching else stand_pivot_y
 
-	var min_cam_y = stand_cam_y - 0.3
-	var max_cam_y = stand_cam_y
-	cam_pos.y = clamp(cam_pos.y, min_cam_y, max_cam_y)
+	# Smooth camera movement
+	var cam_pos = cam.position
+	cam_pos.y = lerp(cam_pos.y, target_cam_y, delta * 12)
+	cam.position = cam_pos
 
-	cam.transform.origin = cam_pos
-
-	var target_pivot_y = crouch_pivot_y if is_crouching else stand_pivot_y
-	pivot.position.y = lerp(pivot.position.y, target_pivot_y, delta * 10)
+	# Smooth pivot movement
+	pivot.position.y = lerp(pivot.position.y, target_pivot_y, delta * 12)
 
 
 # --- GUN SWITCH ---
@@ -192,14 +191,12 @@ func shoot():
 	if not Input.is_action_just_pressed("shoot"):
 		return
 
-	# 1. Calculate trajectory locally
 	var vp = get_viewport().get_visible_rect().size * 0.5
 	var cam_from = cam.project_ray_origin(vp)
 	var cam_dir = cam.project_ray_normal(vp)
 
 	var cam_to = cam_from + cam_dir * max_aim_distance
 	
-	# Raycast to find what we are looking at
 	var hit = get_world_3d().direct_space_state.intersect_ray(
 		PhysicsRayQueryParameters3D.create(cam_from, cam_to)
 	)
@@ -208,19 +205,14 @@ func shoot():
 	var muzzle_pos = muzzle.global_position
 	var bullet_dir = (aim_target - muzzle_pos).normalized()
 
-	# 2. Tell everyone (including myself) to spawn the bullet
 	rpc("spawn_bullet", muzzle_pos, bullet_dir)
 
-# This function runs on EVERYONE'S computer when called
+
 @rpc("call_local", "any_peer") 
 func spawn_bullet(pos: Vector3, dir: Vector3):
 	var bullet = Bullet_Scene.instantiate()
 	bullet.transform.origin = pos
 	bullet.direction = dir
-	
-	# Note: We don't set 'shooter = self' here because 'self' is different on every PC.
-	# If you need to know who shot, pass the player ID in the RPC.
-	
 	get_tree().root.add_child(bullet)
 
 
@@ -232,7 +224,6 @@ func apply_gravity(delta):
 
 # --- MOUSE ROTATION ---
 func _unhandled_input(event):
-	# (Input is already disabled in _ready for non-local players, so we just run logic)
 	if event is InputEventMouseMotion:
 		rotate_y(-event.relative.x * mouse_sensitivity * 0.01)
 
@@ -277,6 +268,7 @@ func apply_head_bob(delta):
 	)
 
 	cam.position = original_cam_pos + bob_offset
+
 
 func update_display(amount):
 	money.text = "TEAM CASH: $" + str(amount)
