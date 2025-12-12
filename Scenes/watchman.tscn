@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://cj2n83ebt73wl"]
+[gd_scene load_steps=9 format=3 uid="uid://cj2n83ebt73wl"]
 
 [ext_resource type="Script" uid="uid://dsbrssqtytso4" path="res://Scripts/watchman.gd" id="1_tew0q"]
 [ext_resource type="PackedScene" uid="uid://cxmb6kgysuomn" path="res://Scenes/Bullet.tscn" id="2_58rv1"]
@@ -22,6 +22,9 @@ radius = 0.2
 height = 1.5
 radial_segments = 6
 rings = 2
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_tew0q"]
+radius = 15.0
 
 [node name="Watchman" type="CharacterBody3D" groups=["enemy"]]
 script = ExtResource("1_tew0q")
@@ -64,3 +67,11 @@ target_position = Vector3(0, 0, -15)
 [node name="RayCast3D" type="RayCast3D" parent="pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.413)
 target_position = Vector3(0, 0, -15)
+
+[node name="Area3D" type="Area3D" parent="pivot"]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pivot/Area3D"]
+shape = SubResource("SphereShape3D_tew0q")
+
+[connection signal="body_entered" from="pivot/Area3D" to="." method="_on_area_3d_body_entered"]
+[connection signal="body_exited" from="pivot/Area3D" to="." method="_on_area_3d_body_exited"]
