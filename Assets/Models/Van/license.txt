@@ -1,0 +1,8 @@
+Model Information:
+* title:	Van (game asset)
+* source:	https://sketchfab.com/3d-models/van-game-asset-2ace7b323f1848f2baa8b706c2e04b7c
+* author:	uday (https://sketchfab.com/udayjeet)
+
+Model License:
+* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
+* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
