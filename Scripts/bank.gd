@@ -20,7 +20,6 @@ func _ready():
 func spawn_player(id):
 	var p = player_scene.instantiate()
 	p.name = str(id)
-
 	var spawn_pos = get_spawn_point()
 	p.position = spawn_pos
 

@@ -93,7 +93,7 @@ func _physics_process(delta: float) -> void:
 				raycast.get_collider().plant()
 			if raycast.get_collider().is_in_group("money"):
 				raycast.get_collider().loot()
-
+			
 
 	update_state()
 	apply_state_effects(delta)

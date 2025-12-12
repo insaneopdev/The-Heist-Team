@@ -1,9 +1,8 @@
-[gd_scene load_steps=52 format=4 uid="uid://bhgru07juc6i7"]
+[gd_scene load_steps=50 format=4 uid="uid://bhgru07juc6i7"]
 
 [ext_resource type="PackedScene" uid="uid://bhv6tp5p456kq" path="res://Assets/Models/Bank/bank.glb" id="1_4wep6"]
 [ext_resource type="Script" uid="uid://dxwxg13hold0v" path="res://Scripts/bank.gd" id="1_mgqks"]
 [ext_resource type="PackedScene" uid="uid://deu6j6pxha5bv" path="res://Scenes/Player.tscn" id="2_cf7ns"]
-[ext_resource type="Script" uid="uid://dk2oa3shkoy8c" path="res://Scripts/OpenVault.gd" id="4_2qj2k"]
 [ext_resource type="PackedScene" uid="uid://bxmtoty58yacp" path="res://Scenes/vault.tscn" id="4_h8m3o"]
 [ext_resource type="PackedScene" uid="uid://doqnj4m8dlerm" path="res://Scenes/money.tscn" id="5_poatj"]
 
@@ -128,9 +127,6 @@ size = Vector3(73.2293, 5796.41, 12.5801)
 [sub_resource type="BoxShape3D" id="BoxShape3D_erstb"]
 size = Vector3(3.78357, 9.93295, 30.5862)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_h06s0"]
-size = Vector3(13, 13, 13)
-
 [sub_resource type="BoxShape3D" id="BoxShape3D_kn22t"]
 size = Vector3(14.309, 5.05908, 24.6619)
 
@@ -171,7 +167,6 @@ transform = Transform3D(-0.866023, -0.433016, 0.250001, 0, 0.499998, 0.866027, -
 shadow_enabled = true
 
 [node name="bank" parent="." instance=ExtResource("1_4wep6")]
-script = ExtResource("4_2qj2k")
 
 [node name="StaticBody3D2" type="StaticBody3D" parent="bank/Sketchfab_model/Sofa 06_fbx/RootNode/Group003" index="5"]
 transform = Transform3D(1, -2.13163e-14, 2.13163e-14, 0, 1, -1.69407e-20, 1.68238e-21, -2.03288e-20, 1, -0.219421, -5.92285, -1.66685)
@@ -257,9 +252,6 @@ shape = SubResource("ConvexPolygonShape3D_erstb")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Plane/StaticBody3D"]
 shape = SubResource("ConvexPolygonShape3D_wuoyq")
-
-[node name="Plane_001" parent="bank" index="13"]
-visible = false
 
 [node name="StaticBody3D" type="StaticBody3D" parent="bank/Plane_001" index="0"]
 
@@ -363,19 +355,11 @@ shape = SubResource("BoxShape3D_erstb")
 [node name="Cylinder_001" parent="bank" index="17"]
 transform = Transform3D(-1.92561e-07, 0.338515, 0, -1.18193, -5.51511e-08, 0, 0, 0, 1.18193, -0.626714, 1.697, -6.82081)
 
-[node name="Area3D" type="Area3D" parent="bank/Cylinder_003" index="0"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Cylinder_003/Area3D"]
-transform = Transform3D(0.999966, 0, 0, 0, 0.999992, 0, 0, 0, 0.999966, 2.4748, 7.57089, 8.64078)
-shape = SubResource("BoxShape3D_h06s0")
-
-[node name="StaticBody3D" type="StaticBody3D" parent="bank/Cylinder_003" index="1"]
+[node name="StaticBody3D" type="StaticBody3D" parent="bank/Cylinder_003" index="0"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 8.76972)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="bank/Cylinder_003/StaticBody3D"]
 transform = Transform3D(0.999944, 0, 0, 0, 0.999986, 0, 0, 0, 0.999944, -0.26858, -1.89084, 0.0207596)
-visible = false
 shape = SubResource("BoxShape3D_kn22t")
 
 [node name="StaticBody3D" type="StaticBody3D" parent="bank/Cube_015" index="0"]
@@ -477,6 +461,165 @@ transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.523
 [node name="Money7" parent="." instance=ExtResource("5_poatj")]
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, -9.5234, 1.64274, -3.50797)
 
-[connection signal="body_entered" from="bank/Cylinder_003/Area3D" to="bank" method="_on_area_3d_body_entered"]
+[node name="Mainhall" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.1067, 0, 4.34586)
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Mainhall"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.66956, 3, -2.44462)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+omni_range = 12.599
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="Mainhall"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.52027, 2.83123, -2.46079)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+omni_range = 12.599
+
+[node name="OmniLight3D3" type="OmniLight3D" parent="Mainhall"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.646, 3, 0.116004)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+shadow_enabled = true
+omni_range = 12.599
+
+[node name="SpotLight3D" type="SpotLight3D" parent="Mainhall"]
+transform = Transform3D(0.999717, 0.022809, 0.00669416, -0.0068415, 0.00638786, 0.999956, 0.0227653, -0.999719, 0.00654211, 1.66351, 3, -2.616)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 4.26393
+spot_angle = 90.0
+
+[node name="SpotLight3D2" type="SpotLight3D" parent="Mainhall"]
+transform = Transform3D(0.999717, 0.022809, 0.00669416, -0.0068415, 0.00638786, 0.999956, 0.0227653, -0.999719, 0.00654211, -2.28063, 3, -2.616)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 4.0
+spot_angle = 90.0
+
+[node name="RestRoom" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.17116, 0, 5.2247)
+
+[node name="SpotLight3D" type="SpotLight3D" parent="RestRoom"]
+transform = Transform3D(0.999435, -0.0336262, -3.85687e-08, 3.78552e-08, -2.18557e-08, 1, -0.0336262, -0.999435, -2.05704e-08, 0.54998, 3.66213, 3.56538)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 4.0
+spot_angle = 60.0
+
+[node name="SpotLight3D2" type="SpotLight3D" parent="RestRoom"]
+transform = Transform3D(0.997564, -0.0697565, 0, -3.04915e-09, -4.36049e-08, 1, -0.0697565, -0.997564, -4.37114e-08, 0.627512, 3.87269, -3.06476)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 4.0
+spot_angle = 60.0
+
+[node name="SpotLight3D3" type="SpotLight3D" parent="RestRoom"]
+transform = Transform3D(0.997564, -0.0697565, 0, -3.04915e-09, -4.36049e-08, 1, -0.0697565, -0.997564, -4.37114e-08, -0.434679, 3.87269, 0.0100055)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 4.0
+spot_angle = 60.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="RestRoom"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0.68)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 2.5
+shadow_enabled = true
+
+[node name="OfficeRoom" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.54791, 3, -2.22511)
+
+[node name="SpotLight3D" type="SpotLight3D" parent="OfficeRoom"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -1.48581, 1.27473, 0.862728)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 5.0
+shadow_enabled = true
+spot_range = 6.0
+spot_angle = 60.0
+
+[node name="SpotLight3D2" type="SpotLight3D" parent="OfficeRoom"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0.862736, 1.27473, 0.862728)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 5.0
+shadow_enabled = true
+spot_range = 6.0
+spot_angle = 60.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="OfficeRoom"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.29228, 0)
+
+[node name="HallWay" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.23732, 0, -7.73713)
+
+[node name="SpotLight3D" type="SpotLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 2.09076, 4, 5.83542)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.5
+spot_range = 6.0
+spot_angle = 50.0
+
+[node name="SpotLight3D4" type="SpotLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -4.59828, 4, 3.21451)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.5
+spot_range = 6.0
+spot_angle = 50.0
+
+[node name="SpotLight3D5" type="SpotLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -4.59828, 4, -1.16501)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.5
+spot_range = 6.0
+spot_angle = 50.0
+
+[node name="SpotLight3D6" type="SpotLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 2.8016, 4, -1.16501)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.5
+spot_range = 6.0
+spot_angle = 50.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.14378, 2.13272, 0)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+shadow_enabled = true
+
+[node name="OmniLight3D2" type="OmniLight3D" parent="HallWay"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.17862, 2.13272, 3.62443)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+
+[node name="Locker" type="Node3D" parent="."]
+transform = Transform3D(0.999597, 0, 0.0283927, 0, 1, 0, -0.0283927, 0, 0.999597, -4.6401, 0, -4.41648)
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Locker"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 5.0
+shadow_enabled = true
+omni_range = 6.5
+
+[node name="SpotLight3D" type="SpotLight3D" parent="Locker"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0.0268035, 3.17228, -4.65173)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 6.0
+spot_angle = 60.0
+
+[node name="SpotLight3D2" type="SpotLight3D" parent="Locker"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, -3.20392, 3.17228, 0.300995)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 6.0
+spot_angle = 60.0
+
+[node name="SpotLight3D3" type="SpotLight3D" parent="Locker"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0.0810504, 3.17228, 3.00463)
+light_color = Color(1, 1, 0.701961, 1)
+light_energy = 4.0
+spot_range = 6.0
+spot_angle = 89.99
 
 [editable path="bank"]
