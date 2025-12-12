@@ -633,9 +633,9 @@ spot_range = 6.0
 spot_angle = 89.99
 
 [node name="Watchman" parent="." instance=ExtResource("6_2qj2k")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.07588, 0.403361, 14.3291)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14.66, 0.403361, 14.3291)
 
 [node name="Cop" parent="." instance=ExtResource("7_wuoyq")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10.675, 0.403361, 14.3291)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22.3094, 0.403361, 14.3291)
 
 [editable path="bank"]
