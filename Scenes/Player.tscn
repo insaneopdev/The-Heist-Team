@@ -16,6 +16,7 @@ albedo_texture_msdf = true
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_kyqiw"]
 material = SubResource("StandardMaterial3D_dewec")
 radius = 0.2
+height = 1.5
 radial_segments = 6
 rings = 2
 
@@ -29,11 +30,11 @@ albedo_texture_msdf = true
 
 [sub_resource type="BoxMesh" id="BoxMesh_kyqiw"]
 material = SubResource("StandardMaterial3D_5ixxa")
-size = Vector3(0.3, 0.3, 1.6)
+size = Vector3(0.3, 0.3, 1.4)
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_gntrk"]
-radius = 0.892379
-height = 2.88504
+radius = 0.541368
+height = 2.21255
 
 [sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_nn08x"]
 properties/0/path = NodePath(".:position")
@@ -56,16 +57,17 @@ Bullet_Scene = ExtResource("3_gntrk")
 transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
 
 [node name="bean" parent="mesh" instance=ExtResource("3_dewec")]
-transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 
 [node name="pivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.29308)
 
 [node name="secondary_gun" type="Node3D" parent="pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.04179, -0.394461, -0.96715)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.04179, -0.394461, -0.386261)
+visible = false
 
 [node name="gun_muzzle" type="Marker3D" parent="pivot/secondary_gun"]
-transform = Transform3D(0.525698, -0.00554633, -1.66543e-10, 0, -3.91289e-08, 0.614935, -0.00325722, -0.895147, -2.68791e-08, -0.3197, 0.0945348, -0.219271)
+transform = Transform3D(0.525698, -0.00554633, -1.66543e-10, 0, -3.91289e-08, 0.614935, -0.00325722, -0.895147, -2.68791e-08, -0.338376, 0.0945348, 0.0235132)
 
 [node name="body" type="Node3D" parent="pivot/secondary_gun"]
 
@@ -75,11 +77,10 @@ mesh = SubResource("CapsuleMesh_kyqiw")
 skeleton = NodePath("../..")
 
 [node name="primary_gun" type="Node3D" parent="pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.03357, -1.75102, -1.03855)
-visible = false
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.36032, -1.75102, -0.602883)
 
 [node name="gun_muzzle" type="Marker3D" parent="pivot/primary_gun"]
-transform = Transform3D(0.999969, -0.0078539, 0, 0.0078539, 0.999969, 0, 0, 0, 1, 1.8231, 1.28175, 0.0130057)
+transform = Transform3D(0.999969, -0.0078539, 0, 0.0078539, 0.999969, 0, 0, 0, 1, 1.8231, 1.28175, 0.118926)
 
 [node name="body" type="Node3D" parent="pivot/primary_gun"]
 
@@ -88,7 +89,7 @@ transform = Transform3D(1, 1.50343e-09, 0, -1.50343e-09, 1, 0, 0, 0, 1, 1.80717,
 mesh = SubResource("BoxMesh_kyqiw")
 
 [node name="Camera3D" type="Camera3D" parent="pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.000675917, 0.606668)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.000675917, 0.686616)
 current = true
 
 [node name="RayCast3D" type="RayCast3D" parent="pivot"]

@@ -94,6 +94,7 @@ func _physics_process(delta: float) -> void:
 			if raycast.get_collider().is_in_group("money"):
 				raycast.get_collider().loot()
 
+
 	update_state()
 	apply_state_effects(delta)
 	gun_switch()
@@ -155,7 +156,7 @@ func apply_movement(delta: float) -> void:
 
 
 # ------------------------------------------------------
-# ⭐ CROUCH SYSTEM FIXED (Smooth, No Snapping)
+# CROUCH SYSTEM FIXED (Smooth, No Snapping)
 # ------------------------------------------------------
 func apply_crouch_offsets(delta):
 	var target_cam_y = (stand_cam_y - 0.4) if is_crouching else stand_cam_y

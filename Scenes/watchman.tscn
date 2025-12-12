@@ -3,10 +3,6 @@
 [ext_resource type="Script" uid="uid://dsbrssqtytso4" path="res://Scripts/watchman.gd" id="1_tew0q"]
 [ext_resource type="PackedScene" uid="uid://dwu1d3yy64sl2" path="res://Assets/Player/bean.glb" id="2_lc3sm"]
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_58rv1"]
-radius = 0.801374
-height = 2.86416
-
 [sub_resource type="NoiseTexture2D" id="NoiseTexture2D_7i7p6"]
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dewec"]
@@ -21,18 +17,12 @@ radius = 0.2
 radial_segments = 6
 rings = 2
 
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_tew0q"]
+radius = 0.550358
+height = 2.21255
+
 [node name="Watchman" type="CharacterBody3D"]
 script = ExtResource("1_tew0q")
-
-[node name="mesh" type="Node3D" parent="."]
-transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
-
-[node name="bean" parent="mesh" instance=ExtResource("2_lc3sm")]
-transform = Transform3D(0.65, 0, 0, 0, 0.65, 0, 0, 0, 0.65, 0, 0, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.358074, 0)
-shape = SubResource("CapsuleShape3D_58rv1")
 
 [node name="pivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.95198)
@@ -53,3 +43,13 @@ skeleton = NodePath("../..")
 [node name="VisionRay" type="RayCast3D" parent="pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.019814, 1.41341)
 target_position = Vector3(0, 0, -7)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.358074, 0)
+shape = SubResource("CapsuleShape3D_tew0q")
+
+[node name="mesh" type="Node3D" parent="."]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, 0, 0)
+
+[node name="bean" parent="mesh" instance=ExtResource("2_lc3sm")]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)

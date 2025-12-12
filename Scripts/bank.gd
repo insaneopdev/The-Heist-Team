@@ -4,6 +4,7 @@ extends Node3D
 @onready var spawn_points := $SpawnPoints.get_children()
 
 
+
 func _ready():
 	# Spawn self
 	spawn_player(multiplayer.get_unique_id())
