@@ -1,11 +1,15 @@
-[gd_scene load_steps=7 format=3 uid="uid://c0iliw0uqop5m"]
+[gd_scene load_steps=9 format=3 uid="uid://c0iliw0uqop5m"]
 
 [ext_resource type="PackedScene" uid="uid://dwu1d3yy64sl2" path="res://Assets/Player/bean.glb" id="1_62v6s"]
 [ext_resource type="Script" uid="uid://csp4do7wg6nx3" path="res://Scripts/cop.gd" id="1_73dpj"]
+[ext_resource type="PackedScene" uid="uid://cxmb6kgysuomn" path="res://Scenes/Bullet.tscn" id="2_bmb3k"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_73dpj"]
 radius = 0.550358
 height = 2.21255
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_bmb3k"]
+radius = 15.0
 
 [sub_resource type="Texture2DRD" id="Texture2DRD_bmb3k"]
 
@@ -21,6 +25,7 @@ size = Vector3(0.3, 0.3, 1.4)
 
 [node name="Cop" type="CharacterBody3D" groups=["enemy"]]
 script = ExtResource("1_73dpj")
+Bullet_Scene = ExtResource("2_bmb3k")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.358074, 0)
@@ -35,6 +40,12 @@ transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 0, 0, 0)
 [node name="pivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1.29308)
 
+[node name="Area3D" type="Area3D" parent="pivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1.29308)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="pivot/Area3D"]
+shape = SubResource("SphereShape3D_bmb3k")
+
 [node name="primary_gun" type="Node3D" parent="pivot"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.36032, -1.75102, -0.602883)
 
@@ -47,6 +58,17 @@ transform = Transform3D(0.999969, -0.0078539, 0, 0.0078539, 0.999969, 0, 0, 0, 1
 transform = Transform3D(1, 1.50343e-09, 0, -1.50343e-09, 1, 0, 0, 0, 1, 1.80717, 1.28175, 0.817193)
 mesh = SubResource("BoxMesh_26d7h")
 
+[node name="RayLeft" type="RayCast3D" parent="pivot"]
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, -0.019814, 1.41341)
+target_position = Vector3(0, 0, -15)
+
+[node name="RayRight" type="RayCast3D" parent="pivot"]
+transform = Transform3D(-4.37114e-08, 0, -1, 0, 1, 0, 1, 0, -4.37114e-08, 0, -0.019814, 1.41341)
+target_position = Vector3(0, 0, -15)
+
 [node name="RayCast3D" type="RayCast3D" parent="pivot"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.019814, 1.41341)
-target_position = Vector3(0, 0, -7)
+transform = Transform3D(-4.37114e-08, 0, 1, 0, 1, 0, -1, 0, -4.37114e-08, 0, -0.019814, 1.41341)
+target_position = Vector3(0, 0, -15)
+
+[connection signal="body_entered" from="pivot/Area3D" to="." method="_on_area_3d_body_entered"]
+[connection signal="body_exited" from="pivot/Area3D" to="." method="_on_area_3d_body_exited"]

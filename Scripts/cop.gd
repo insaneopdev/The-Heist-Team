@@ -1,38 +1,299 @@
 extends CharacterBody3D
 
-# NODE RELATION 
-@onready var detector = $pivot/RayCast3D
-
-# SCENE 
-@export var Bullet_Scene:PackedScene
-
-
-func _ready() -> void:
-	make_cop_dress()  
-
-
-func _physics_process(delta: float) -> void:
-	pass
+# ==============================
+# NODE REFERENCES
+# ==============================
+@onready var pivot           = $pivot
+@onready var primary_gun     = $pivot/primary_gun
+@onready var p_muzzle        = $pivot/primary_gun/gun_muzzle
+@onready var ray_forward     = $pivot/RayCast3D
+@onready var ray_left        = $pivot/RayLeft
+@onready var ray_right       = $pivot/RayRight
+@onready var vision_area     = $pivot/Area3D
 
 
-# -----------------------
-# COP UNIFORM FUNCTION
-# -----------------------
-func make_cop_dress() -> void:
-	var bean = $mesh/bean
+# ==============================
+# EXPORTS
+# ==============================
+@export var Bullet_Scene: PackedScene
+@export var speed := 5.0
+@export var shoot_range := 12.0
+@export var fov_angle := 180.0
+@export var shoot_delay := 0.6
 
-	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))     # body
-	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3)) # hat top
-	_set_color(bean.get_node("Torus"), Color(0, 0, 0))            # hat edge
+
+# ==============================
+# STATES
+# ==============================
+var detected: bool = false
+var detection_source := ""          # "forward", "left", "right", "area"
+var target: Node3D = null
+var can_shoot := true
+var scanning := true
 
 
-# -----------------------
-# HELPER FUNCTION
-# -----------------------
-func _set_color(mesh: MeshInstance3D, color: Color):
-	if mesh == null or mesh.mesh == null:
+# ==============================
+# SCANNING
+# ==============================
+var left_angle := 0.0
+var right_angle := 0.0
+var scan_speed := 45.0
+var left_dir := 1
+var right_dir := -1
+
+
+# ==============================
+# LOST PLAYER SEARCH
+# ==============================
+var last_player_pos := Vector3.ZERO
+var searching_lost_player := false
+var search_timer := 0.0
+var max_search_time := 2.0
+var chase_speed_multiplier := 1.35
+var search_arrival_dist := 1.0
+
+
+# ==============================
+# READY
+# ==============================
+func _ready():
+	primary_gun.show()
+	make_cop_dress()
+
+
+# ==============================
+# PHYSICS LOOP
+# ==============================
+func _physics_process(delta):
+
+	_detect_player()
+
+	# SCANNING ONLY IF NOT IN SEARCH MODE
+	if scanning and not searching_lost_player:
+		_scan_left(delta)
+		_scan_right(delta)
+
+	# BEHAVIOR
+	if detected && target:
+		_do_detected_behavior(delta)
+
+	elif searching_lost_player:
+		_do_search_behavior(delta)
+
+	else:
+		velocity = Vector3.ZERO
+
+	move_and_slide()
+
+
+
+# ==============================
+# WHEN PLAYER DETECTED
+# ==============================
+func _do_detected_behavior(delta):
+
+	searching_lost_player = false
+	search_timer = 0.0
+
+	last_player_pos = target.global_transform.origin
+	_rotate_to(target)
+
+	var dist = global_transform.origin.distance_to(target.global_transform.origin)
+
+	# SHOOTING
+	if dist <= shoot_range:
+		velocity = Vector3.ZERO
+		if can_shoot:
+			_shoot()
 		return
 
+	# CHASE MOVEMENT
+	var dir = (target.global_transform.origin - global_transform.origin)
+	dir.y = 0
+	velocity = dir.normalized() * speed
+
+
+
+# ==============================
+# SEARCH LAST KNOWN LOCATION
+# ==============================
+func _do_search_behavior(delta):
+
+	search_timer += delta
+
+	var dir = last_player_pos - global_transform.origin
+	dir.y = 0
+
+	# ARRIVED AT SEARCH SPOT → LOOK AROUND
+	if dir.length() < search_arrival_dist:
+		velocity = Vector3.ZERO
+		_scan_left(delta)
+		_scan_right(delta)
+
+		if search_timer >= max_search_time:
+			searching_lost_player = false
+			scanning = true
+		return
+
+	# MOVE TO LAST SEEN POSITION
+	velocity = dir.normalized() * speed * chase_speed_multiplier
+
+
+
+# ==============================
+# SCANNING SYSTEM
+# ==============================
+func _scan_left(delta):
+	left_angle += left_dir * scan_speed * delta
+	if left_angle > 90: left_angle = 90; left_dir = -1
+	if left_angle < -90: left_angle = -90; left_dir = 1
+	ray_left.rotation.y = deg_to_rad(left_angle)
+
+func _scan_right(delta):
+	right_angle += right_dir * scan_speed * delta
+	if right_angle > 90: right_angle = 90; right_dir = -1
+	if right_angle < -90: right_angle = -90; right_dir = 1
+	ray_right.rotation.y = deg_to_rad(right_angle)
+
+
+
+# ==============================
+# DETECTION SYSTEM
+# ==============================
+func _detect_player():
+
+	# If Area3D already sees player → NO RESET
+	if detection_source == "area" and detected:
+		return
+
+	var f = ray_forward.is_colliding() and ray_forward.get_collider().is_in_group("player")
+	var l = ray_left.is_colliding()    and ray_left.get_collider().is_in_group("player")
+	var r = ray_right.is_colliding()   and ray_right.get_collider().is_in_group("player")
+
+	if f:
+		_set_detected(ray_forward, ray_forward.get_collider(), "forward")
+		return
+
+	if l:
+		_set_detected(ray_left, ray_left.get_collider(), "left")
+		return
+
+	if r:
+		_set_detected(ray_right, ray_right.get_collider(), "right")
+		return
+
+	# LOST → Start searching mode
+	if detected:
+		searching_lost_player = true
+		search_timer = 0.0
+		scanning = false
+
+	detected = false
+	detection_source = ""
+	target = null
+
+
+
+# ==============================
+# TARGET ACQUIRED
+# ==============================
+func _set_detected(rc, body, src):
+
+	target = body
+	detected = true
+	detection_source = src
+
+	scanning = false
+	searching_lost_player = false
+	search_timer = 0.0
+
+	_point_ray(ray_forward)
+	_point_ray(ray_left)
+	_point_ray(ray_right)
+
+
+
+# ==============================
+# AREA3D DETECTION
+# ==============================
+func _on_area_3d_body_entered(body):
+	if not body.is_in_group("player"):
+		return
+
+	detected = true
+	target = body
+	detection_source = "area"
+
+	last_player_pos = body.global_transform.origin
+	scanning = false
+	searching_lost_player = false
+	search_timer = 0.0
+
+	_point_ray(ray_forward)
+	_point_ray(ray_left)
+	_point_ray(ray_right)
+
+
+func _on_area_3d_body_exited(body):
+	if not body.is_in_group("player"):
+		return
+
+	detected = false
+	detection_source = ""
+	target = null
+	searching_lost_player = true
+	search_timer = 0.0
+
+
+
+# ==============================
+# HELPERS
+# ==============================
+func _point_ray(rc):
+	if target == null: return
+	var dir = target.global_transform.origin - rc.global_transform.origin
+	dir.y = 0
+	if dir.length() > 0.01:
+		rc.look_at(rc.global_transform.origin + dir, Vector3.UP)
+
+
+func _rotate_to(body):
+	var pos = body.global_transform.origin
+	pos.y = global_transform.origin.y
+	look_at(pos, Vector3.UP)
+
+
+
+# ==============================
+# SHOOT
+# ==============================
+func _shoot():
+	can_shoot = false
+
+	var b = Bullet_Scene.instantiate()
+	b.global_transform = p_muzzle.global_transform
+	b.direction = -pivot.global_transform.basis.z.normalized()
+
+	get_tree().current_scene.add_child(b)
+
+	await get_tree().create_timer(shoot_delay).timeout
+	can_shoot = true
+
+
+
+# ==============================
+# MATERIAL COLOR
+# ==============================
+func make_cop_dress():
+	var bean = $mesh/bean
+	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))
+	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3))
+	_set_color(bean.get_node("Torus"), Color.BLACK)
+
+
+func _set_color(mesh, color):
+	if mesh == null or mesh.mesh == null:
+		return
 	for i in range(mesh.mesh.get_surface_count()):
 		var mat = mesh.get_active_material(i)
 		if mat:
