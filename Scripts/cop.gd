@@ -11,6 +11,7 @@ extends CharacterBody3D
 @onready var ray_right       = $pivot/RayRight
 @onready var vision_area     = $pivot/Area3D
 
+
 # ==============================
 # EXPORTS
 # ==============================
@@ -20,15 +21,16 @@ extends CharacterBody3D
 @export var fov_angle := 180.0
 @export var shoot_delay := 0.6
 
+
 # ==============================
 # STATES
 # ==============================
 var detected: bool = false
-var detection_source := ""        # "forward", "left", "right", "area"
+var detection_source := ""          # "forward", "left", "right", "area"
 var target: Node3D = null
-var active_ray = null
 var can_shoot := true
 var scanning := true
+
 
 # ==============================
 # SCANNING
@@ -38,6 +40,7 @@ var right_angle := 0.0
 var scan_speed := 45.0
 var left_dir := 1
 var right_dir := -1
+
 
 # ==============================
 # LOST PLAYER SEARCH
@@ -65,16 +68,13 @@ func _physics_process(delta):
 
 	_detect_player()
 
-	# Show debug
-	#print("DETECTED:", detected, " | SRC:", detection_source)
-
-	# SCANNING
+	# SCANNING ONLY IF NOT IN SEARCH MODE
 	if scanning and not searching_lost_player:
 		_scan_left(delta)
 		_scan_right(delta)
 
 	# BEHAVIOR
-	if detected and target:
+	if detected && target:
 		_do_detected_behavior(delta)
 
 	elif searching_lost_player:
@@ -84,6 +84,7 @@ func _physics_process(delta):
 		velocity = Vector3.ZERO
 
 	move_and_slide()
+
 
 
 # ==============================
@@ -99,17 +100,18 @@ func _do_detected_behavior(delta):
 
 	var dist = global_transform.origin.distance_to(target.global_transform.origin)
 
-	# Shoot range
+	# SHOOTING
 	if dist <= shoot_range:
 		velocity = Vector3.ZERO
 		if can_shoot:
 			_shoot()
+		return
 
-	# Chase movement
-	else:
-		var dir = (target.global_transform.origin - global_transform.origin)
-		dir.y = 0
-		velocity = dir.normalized() * speed
+	# CHASE MOVEMENT
+	var dir = (target.global_transform.origin - global_transform.origin)
+	dir.y = 0
+	velocity = dir.normalized() * speed
+
 
 
 # ==============================
@@ -122,7 +124,7 @@ func _do_search_behavior(delta):
 	var dir = last_player_pos - global_transform.origin
 	dir.y = 0
 
-	# If reached last known spot → scan there
+	# ARRIVED AT SEARCH SPOT → LOOK AROUND
 	if dir.length() < search_arrival_dist:
 		velocity = Vector3.ZERO
 		_scan_left(delta)
@@ -133,8 +135,9 @@ func _do_search_behavior(delta):
 			scanning = true
 		return
 
-	# Move toward last known player
+	# MOVE TO LAST SEEN POSITION
 	velocity = dir.normalized() * speed * chase_speed_multiplier
+
 
 
 # ==============================
@@ -153,39 +156,33 @@ func _scan_right(delta):
 	ray_right.rotation.y = deg_to_rad(right_angle)
 
 
+
 # ==============================
 # DETECTION SYSTEM
 # ==============================
 func _detect_player():
 
-	var area_prior = (detection_source == "area")
-
-	# If Area3D already sees player → DO NOT RESET DETECTION
-	if area_prior:
-		detected = true
+	# If Area3D already sees player → NO RESET
+	if detection_source == "area" and detected:
 		return
 
-	# Otherwise raycast detection controls the state
 	var f = ray_forward.is_colliding() and ray_forward.get_collider().is_in_group("player")
-	var l = ray_left.is_colliding() and ray_left.get_collider().is_in_group("player")
-	var r = ray_right.is_colliding() and ray_right.get_collider().is_in_group("player")
+	var l = ray_left.is_colliding()    and ray_left.get_collider().is_in_group("player")
+	var r = ray_right.is_colliding()   and ray_right.get_collider().is_in_group("player")
 
-	# FORWARD
 	if f:
 		_set_detected(ray_forward, ray_forward.get_collider(), "forward")
 		return
 
-	# LEFT
 	if l:
 		_set_detected(ray_left, ray_left.get_collider(), "left")
 		return
 
-	# RIGHT
 	if r:
 		_set_detected(ray_right, ray_right.get_collider(), "right")
 		return
 
-	# LOST → Enter searching mode
+	# LOST → Start searching mode
 	if detected:
 		searching_lost_player = true
 		search_timer = 0.0
@@ -194,7 +191,7 @@ func _detect_player():
 	detected = false
 	detection_source = ""
 	target = null
-	active_ray = null
+
 
 
 # ==============================
@@ -203,7 +200,6 @@ func _detect_player():
 func _set_detected(rc, body, src):
 
 	target = body
-	active_ray = rc
 	detected = true
 	detection_source = src
 
@@ -216,6 +212,7 @@ func _set_detected(rc, body, src):
 	_point_ray(ray_right)
 
 
+
 # ==============================
 # AREA3D DETECTION
 # ==============================
@@ -223,13 +220,11 @@ func _on_area_3d_body_entered(body):
 	if not body.is_in_group("player"):
 		return
 
-	print("AREA DETECTED PLAYER!")
-
 	detected = true
-	detection_source = "area"
 	target = body
-	last_player_pos = body.global_transform.origin
+	detection_source = "area"
 
+	last_player_pos = body.global_transform.origin
 	scanning = false
 	searching_lost_player = false
 	search_timer = 0.0
@@ -240,12 +235,15 @@ func _on_area_3d_body_entered(body):
 
 
 func _on_area_3d_body_exited(body):
-	if body.is_in_group("player"):
-		detected = false
-		detection_source = ""
-		target = null
-		searching_lost_player = true
-		search_timer = 0.0
+	if not body.is_in_group("player"):
+		return
+
+	detected = false
+	detection_source = ""
+	target = null
+	searching_lost_player = true
+	search_timer = 0.0
+
 
 
 # ==============================
@@ -265,13 +263,12 @@ func _rotate_to(body):
 	look_at(pos, Vector3.UP)
 
 
+
 # ==============================
 # SHOOT
 # ==============================
 func _shoot():
 	can_shoot = false
-
-	print("SHOOTING FROM:", detection_source)
 
 	var b = Bullet_Scene.instantiate()
 	b.global_transform = p_muzzle.global_transform
@@ -281,6 +278,7 @@ func _shoot():
 
 	await get_tree().create_timer(shoot_delay).timeout
 	can_shoot = true
+
 
 
 # ==============================
@@ -296,9 +294,9 @@ func make_cop_dress():
 func _set_color(mesh, color):
 	if mesh == null or mesh.mesh == null:
 		return
-	for i in mesh.mesh.get_surface_count():
-		var m = mesh.get_active_material(i)
-		if m:
-			var nm = m.duplicate()
-			nm.albedo_color = color
-			mesh.set_surface_override_material(i, nm)
+	for i in range(mesh.mesh.get_surface_count()):
+		var mat = mesh.get_active_material(i)
+		if mat:
+			var new_mat = mat.duplicate()
+			new_mat.albedo_color = color
+			mesh.set_surface_override_material(i, new_mat)
