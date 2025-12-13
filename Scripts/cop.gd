@@ -52,6 +52,9 @@ var max_search_time := 2.0
 var chase_speed_multiplier := 1.35
 var search_arrival_dist := 1.0
 
+# --- ENVIRONMENT VARIABLES ---
+@export var gravity : float = 20.0
+
 
 # ==============================
 # READY
@@ -82,6 +85,8 @@ func _physics_process(delta):
 
 	else:
 		velocity = Vector3.ZERO
+		
+	apply_gravity(delta)
 
 	move_and_slide()
 
@@ -300,3 +305,8 @@ func _set_color(mesh, color):
 			var new_mat = mat.duplicate()
 			new_mat.albedo_color = color
 			mesh.set_surface_override_material(i, new_mat)
+
+# --- GRAVITY ---
+func apply_gravity(delta):
+	if not is_on_floor():
+		velocity.y -= gravity * delta

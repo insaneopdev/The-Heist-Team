@@ -1,13 +1,14 @@
 extends Area3D
 
-#BULLET SETTINGS
 @export var bullet_speed = 30.0
 @export var life_time := 2.0
 
-#OTHER VARIABLES
 var direction: Vector3 = Vector3.ZERO
-var shooter    
+var shooter
 
+func _ready():
+	if direction != Vector3.ZERO:
+		look_at(global_position + direction, Vector3.UP)
 
 func _physics_process(delta):
 	var start = global_transform.origin
@@ -30,7 +31,6 @@ func _physics_process(delta):
 		queue_free()
 		return
 
-	# move bullet
 	global_transform.origin = end
 
 	life_time -= delta
