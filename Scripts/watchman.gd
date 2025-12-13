@@ -41,6 +41,8 @@ var scanning := true
 var lose_delay := 0.5
 var lose_timer := 0.0
 
+# --- ENVIRONMENT VARIABLES ---
+@export var gravity : float = 20.0
 
 func _ready():
 	secondary_gun.show()
@@ -73,6 +75,8 @@ func _physics_process(delta):
 
 	else:
 		velocity = Vector3.ZERO
+	
+	apply_gravity(delta)
 
 	move_and_slide()
 
@@ -143,7 +147,6 @@ func _on_area_3d_body_entered(body: Node3D) -> void:
 	if not body.is_in_group("player"):
 		return
 
-	print("AREA DETECTED PLAYER")
 	detected = true
 	target = body
 	detected_source = "area"
@@ -156,7 +159,6 @@ func _on_area_3d_body_exited(body: Node3D) -> void:
 	if not body.is_in_group("player"):
 		return
 
-	print("AREA LOST PLAYER")
 
 	# Start losing countdown
 	detected_source = ""
@@ -193,7 +195,6 @@ func _reset_scan_rays():
 # ============================================================
 func _shoot():
 	can_shoot = false
-	print("SHOOT FROM:", detected_source)
 
 	var b = Bullet_Scene.instantiate()
 	b.global_transform = s_muzzle.global_transform
@@ -254,3 +255,9 @@ func _set_color(mesh, color):
 			var n = m.duplicate()
 			n.albedo_color = color
 			mesh.set_surface_override_material(i, n)
+
+
+# --- GRAVITY ---
+func apply_gravity(delta):
+	if not is_on_floor():
+		velocity.y -= gravity * delta

@@ -38,7 +38,7 @@ var muzzle = null
 
 # --- NEW CROUCH SYSTEM (SCALING PLAYER) ---
 var stand_scale := Vector3(1, 1, 1)
-var crouch_scale := Vector3(1, 0.6, 1)
+var crouch_scale := Vector3(1, 0.8, 1)
 var crouch_lerp_speed := 10.0
 
 # --- HEAD BOB VARIABLES ---
@@ -226,7 +226,6 @@ func apply_gravity(delta):
 
 
 # --- MOUSE ROTATION ---
-# --- MOUSE ROTATION ---
 func _unhandled_input(event):
 	if event is InputEventMouseMotion:
 		
@@ -240,7 +239,7 @@ func _unhandled_input(event):
 		# Up = -60 degrees
 		# Down = +45 degrees
 		var upper_limit = deg_to_rad(-60)
-		var lower_limit = deg_to_rad(45)
+		var lower_limit = deg_to_rad(15)
 
 		rotation_x = clamp(rotation_x, upper_limit, lower_limit)
 
