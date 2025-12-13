@@ -21,7 +21,6 @@ func _ready():
 	multiplayer.peer_connected.connect(spawn_player)
 	multiplayer.peer_disconnected.connect(remove_player)
 	
-	anim.play("RESET")
 	drill.visible = false
 	particles.emitting = false
 
