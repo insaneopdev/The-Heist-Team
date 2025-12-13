@@ -6,11 +6,12 @@ extends CharacterBody3D
 @onready var pivot = $pivot
 @onready var secondary_gun = $pivot/secondary_gun
 @onready var s_muzzle = $pivot/secondary_gun/gun_muzzle
-
 @onready var ray = $pivot/RayCast3D
 @onready var ray_left = $pivot/RayLeft
 @onready var ray_right = $pivot/RayRight
 @onready var area = $pivot/Area3D
+@onready var bottom = $check/bottom
+@onready var up = $check/up
 
 # =========================
 # EXPORTS
@@ -20,14 +21,17 @@ extends CharacterBody3D
 @export var shoot_range := 10.0
 @export var fov_angle := 180.0
 @export var shoot_delay := 0.8
+@export var jump_height := 5.0
+@export var gravity : float = 20.0
+
 
 # =========================
 # VARIABLES
 # =========================
 var target: Node3D = null
-var can_shoot = true
-var detected: bool = false
-var detected_source := ""  # forward / left / right / area
+var can_shoot := true
+var detected := false
+var detected_source := ""
 
 var left_angle := 0.0
 var left_dir := 1
@@ -37,18 +41,21 @@ var right_dir := -1
 var scan_speed := 60.0
 var scanning := true
 
-# Delay before fully losing target
 var lose_delay := 0.5
 var lose_timer := 0.0
 
-# --- ENVIRONMENT VARIABLES ---
-@export var gravity : float = 20.0
 
+# =========================
+# READY
+# =========================
 func _ready():
 	secondary_gun.show()
 	make_watchman_dress()
 
 
+# =========================
+# PHYSICS
+# =========================
 func _physics_process(delta):
 
 	_detect_player(delta)
@@ -58,40 +65,40 @@ func _physics_process(delta):
 		_scan_right(delta)
 
 	if detected and target:
-		# Stop scanning rotation while tracking the target
 		_reset_scan_rays()
-
 		_rotate_to(target)
 
 		var d = global_transform.origin.distance_to(target.global_transform.origin)
 		if d < shoot_range:
-			velocity = Vector3.ZERO
+			velocity.x = 0
+			velocity.z = 0
 			if can_shoot:
 				_shoot()
 		else:
 			var dir = target.global_transform.origin - global_transform.origin
 			dir.y = 0
-			velocity = dir.normalized() * speed
-
+			dir = dir.normalized()
+			velocity.x = dir.x * speed
+			velocity.z = dir.z * speed
 	else:
-		velocity = Vector3.ZERO
-	
-	apply_gravity(delta)
+		velocity.x = 0
+		velocity.z = 0
 
+	_apply_gravity(delta)
 	move_and_slide()
 
 
 
+
+
 # ============================================================
-# DETECTION (RAY + AREA PRIORITY)
+# DETECTION
 # ============================================================
 func _detect_player(delta):
 
-	# AREA ALWAYS OVERRIDES RAYCAST
 	if detected_source == "area" and detected and target:
 		return
 
-	# Reset ray detection
 	if detected_source != "area":
 		detected = false
 		target = null
@@ -120,7 +127,6 @@ func _detect_player(delta):
 			_set_detected(body, "right")
 			return
 
-	# If previously detected but now rays see nothing → start countdown
 	if not detected:
 		lose_timer += delta
 		if lose_timer >= lose_delay:
@@ -128,7 +134,6 @@ func _detect_player(delta):
 			scanning = true
 	else:
 		lose_timer = 0.0
-
 
 
 func _set_detected(body, src):
@@ -139,11 +144,10 @@ func _set_detected(body, src):
 	lose_timer = 0.0
 
 
-
 # ============================================================
-# AREA3D SIGNALS
+# AREA SIGNALS
 # ============================================================
-func _on_area_3d_body_entered(body: Node3D) -> void:
+func _on_area_3d_body_entered(body: Node3D):
 	if not body.is_in_group("player"):
 		return
 
@@ -154,18 +158,14 @@ func _on_area_3d_body_entered(body: Node3D) -> void:
 	lose_timer = 0.0
 
 
-
-func _on_area_3d_body_exited(body: Node3D) -> void:
+func _on_area_3d_body_exited(body: Node3D):
 	if not body.is_in_group("player"):
 		return
 
-
-	# Start losing countdown
 	detected_source = ""
 	detected = false
 	target = null
 	scanning = true
-
 
 
 # ============================================================
@@ -189,7 +189,6 @@ func _reset_scan_rays():
 	ray_right.rotation = Vector3.ZERO
 
 
-
 # ============================================================
 # SHOOTING
 # ============================================================
@@ -205,34 +204,37 @@ func _shoot():
 	can_shoot = true
 
 
-
 # ============================================================
-# SCANNING SYSTEM
+# SCANNING
 # ============================================================
 func _scan_left(delta):
 	left_angle += left_dir * scan_speed * delta
-	if left_angle >= 90.0:
-		left_angle = 90.0
+	if left_angle >= 90:
+		left_angle = 90
 		left_dir = -1
-	elif left_angle <= -90.0:
-		left_angle = -90.0
+	elif left_angle <= -90:
+		left_angle = -90
 		left_dir = 1
-
-	ray_left.rotation = Vector3(0, deg_to_rad(left_angle), 0)
-
+	ray_left.rotation.y = deg_to_rad(left_angle)
 
 
 func _scan_right(delta):
 	right_angle += right_dir * scan_speed * delta
-	if right_angle >= 90.0:
-		right_angle = 90.0
+	if right_angle >= 90:
+		right_angle = 90
 		right_dir = -1
-	elif right_angle <= -90.0:
-		right_angle = -90.0
+	elif right_angle <= -90:
+		right_angle = -90
 		right_dir = 1
+	ray_right.rotation.y = deg_to_rad(right_angle)
 
-	ray_right.rotation = Vector3(0, deg_to_rad(right_angle), 0)
 
+# ============================================================
+# GRAVITY
+# ============================================================
+func _apply_gravity(delta):
+	if not is_on_floor():
+		velocity.y -= gravity * delta
 
 
 # ============================================================
@@ -248,16 +250,9 @@ func make_watchman_dress():
 func _set_color(mesh, color):
 	if mesh == null or mesh.mesh == null:
 		return
-
 	for i in range(mesh.mesh.get_surface_count()):
 		var m = mesh.get_active_material(i)
 		if m:
 			var n = m.duplicate()
 			n.albedo_color = color
 			mesh.set_surface_override_material(i, n)
-
-
-# --- GRAVITY ---
-func apply_gravity(delta):
-	if not is_on_floor():
-		velocity.y -= gravity * delta
