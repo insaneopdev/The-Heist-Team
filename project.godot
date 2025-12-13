@@ -26,6 +26,7 @@ vault=""
 money=""
 player=""
 enemy=""
+steps=""
 
 [input]
 
