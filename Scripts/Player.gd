@@ -62,7 +62,7 @@ var is_crouching = false
 var current_speed = 0.0
 var stand_scale := Vector3(1, 1, 1)
 var crouch_scale := Vector3(1, 0.8, 1)
-var downed_scale := Vector3(1, 0.4, 1) 
+var downed_scale := Vector3(1, 0.5, 1) 
 var crouch_lerp_speed := 10.0
 var spectate_target_idx = 0
 
