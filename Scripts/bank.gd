@@ -6,6 +6,7 @@ extends Node3D
 @onready var drill = $bank/drill
 @onready var particles = $bank/GPUParticles3D
 @onready var timer = $bank/drilltime
+@onready var label = $Area3D/Label3D
 
 var current_state = 0
 
@@ -23,6 +24,35 @@ func _ready():
 	
 	drill.visible = false
 	particles.emitting = false
+
+func _process(delta):
+	var money_needed = GameManager.min_loot_required - GameManager.total_loot
+	var enemies_left = GameManager.get_remaining_enemies_count()
+	
+	# CONDITION 1: NEED MONEY
+	if money_needed > 0:
+		label.text = "Need $" + str(money_needed) + " more"
+		label.modulate = Color.RED
+		
+	# CONDITION 2: NEED KILLS
+	elif enemies_left > 0:
+		label.text = "Eliminate " + str(enemies_left) + " Enemies!"
+		label.modulate = Color.ORANGE
+		
+	# CONDITION 3: ESCAPE READY
+	else:
+		label.text = "Get in to Escape!"
+		label.modulate = Color.GREEN
+
+func _on_area_3d_body_entered(body):
+	# Only the Host checks the win condition
+	if not multiplayer.is_server(): return
+	
+	if body.is_in_group("player"):
+		# Ensure they aren't dead/spectating
+		if body.state != body.PlayerState.SPECTATING:
+			if GameManager.check_extraction_conditions():
+				GameManager.rpc("end_game", true)
 
 func spawn_player(id):
 	var p = player_scene.instantiate()

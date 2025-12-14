@@ -24,6 +24,7 @@ extends CharacterBody3D
 @export var jump_height := 5.0
 @export var gravity : float = 20.0
 
+var health = 100
 
 # =========================
 # VARIABLES
@@ -49,6 +50,7 @@ var lose_timer := 0.0
 # READY
 # =========================
 func _ready():
+	GameManager.register_enemy()
 	secondary_gun.show()
 	make_watchman_dress()
 
@@ -256,3 +258,20 @@ func _set_color(mesh, color):
 			var n = m.duplicate()
 			n.albedo_color = color
 			mesh.set_surface_override_material(i, n)
+
+# MODIFIED: Now accepts attacker_id
+# MODIFIED: Accepts attacker_id
+@rpc("any_peer", "call_local")
+func receive_damage(amount, attacker_id):
+	health -= amount
+	
+	if health <= 0:
+		die(attacker_id)
+
+func die(killer_id):
+	if multiplayer.is_server():
+		GameManager.enemy_died()
+		GameManager.add_kill(killer_id)
+	remove_from_group("enemy")
+	$CollisionShape3D.disabled = true
+	queue_free()

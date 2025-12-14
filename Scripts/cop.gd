@@ -58,11 +58,13 @@ var search_arrival_dist := 1.0
 # --- ENVIRONMENT VARIABLES ---
 @export var gravity : float = 20.0
 
+var health = 100
 
 # ==============================
 # READY
 # ==============================
 func _ready():
+	GameManager.register_enemy()
 	primary_gun.show()
 	make_cop_dress()
 
@@ -313,3 +315,19 @@ func _set_color(mesh, color):
 func apply_gravity(delta):
 	if not is_on_floor():
 		velocity.y -= gravity * delta
+
+# MODIFIED: Accepts attacker_id
+@rpc("any_peer", "call_local")
+func receive_damage(amount, attacker_id):
+	health -= amount
+	
+	if health <= 0:
+		die(attacker_id)
+
+func die(killer_id):
+	if multiplayer.is_server():
+		GameManager.enemy_died()
+		GameManager.add_kill(killer_id)
+	remove_from_group("enemy")
+	$CollisionShape3D.disabled = true
+	queue_free()
