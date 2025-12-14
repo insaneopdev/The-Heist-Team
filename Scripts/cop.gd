@@ -44,6 +44,8 @@ var health := 100
 # READY
 # ==============================
 func _ready():
+	#print("NAV MAP:", nav_agent.navigation_map)
+
 	GameManager.register_enemy()
 	primary_gun.show()
 	make_cop_dress()
@@ -65,6 +67,10 @@ func _physics_process(delta):
 		_idle_behavior()
 
 	_apply_gravity(delta)
+
+	# --- IMPORTANT: feed velocity to NavigationAgent3D so it can advance the path ---
+	nav_agent.set_velocity(velocity)
+
 	move_and_slide()
 
 # ==============================
@@ -113,6 +119,8 @@ func _search_behavior(delta):
 # NAVIGATION MOVEMENT (CORRECT GODOT 4)
 # ==============================
 func _move_along_nav(move_speed: float):
+
+	# avoid moving when agent has no path or is finished
 	if nav_agent.is_navigation_finished():
 		velocity.x = 0
 		velocity.z = 0
