@@ -44,8 +44,6 @@ var health := 100
 # READY
 # ==============================
 func _ready():
-	#print("NAV MAP:", nav_agent.navigation_map)
-
 	GameManager.register_enemy()
 	primary_gun.show()
 	make_cop_dress()
@@ -60,17 +58,13 @@ func _ready():
 # ==============================
 func _physics_process(delta):
 	if detected and target:
-		_detected_behavior(delta)
+		_detected_behavior()
 	elif searching_lost_player:
 		_search_behavior(delta)
 	else:
 		_idle_behavior()
 
 	_apply_gravity(delta)
-
-	# --- IMPORTANT: feed velocity to NavigationAgent3D so it can advance the path ---
-	nav_agent.set_velocity(velocity)
-
 	move_and_slide()
 
 # ==============================
@@ -81,13 +75,13 @@ func _idle_behavior():
 	velocity.z = 0
 
 # ==============================
-# DETECTED BEHAVIOR
+# DETECTED / CHASE
 # ==============================
-func _detected_behavior(delta):
+func _detected_behavior():
 	last_player_pos = target.global_position
 	_rotate_to(target)
 
-	var dist = global_position.distance_to(target.global_position)
+	var dist := global_position.distance_to(target.global_position)
 
 	if dist <= shoot_range:
 		velocity.x = 0
@@ -100,7 +94,7 @@ func _detected_behavior(delta):
 	_move_along_nav(speed)
 
 # ==============================
-# SEARCH BEHAVIOR
+# SEARCH
 # ==============================
 func _search_behavior(delta):
 	search_timer += delta
@@ -116,21 +110,19 @@ func _search_behavior(delta):
 			searching_lost_player = false
 
 # ==============================
-# NAVIGATION MOVEMENT (CORRECT GODOT 4)
+# NAVIGATION MOVEMENT
 # ==============================
 func _move_along_nav(move_speed: float):
-
-	# avoid moving when agent has no path or is finished
 	if nav_agent.is_navigation_finished():
 		velocity.x = 0
 		velocity.z = 0
 		return
 
-	var next_pos = nav_agent.get_next_path_position()
-	var dir = next_pos - global_position
+	var next_pos: Vector3 = nav_agent.get_next_path_position()
+	var dir := next_pos - global_position
 	dir.y = 0
 
-	if dir.length() < 0.05:
+	if dir.length_squared() < 0.01:
 		velocity.x = 0
 		velocity.z = 0
 		return
@@ -140,7 +132,7 @@ func _move_along_nav(move_speed: float):
 	velocity.z = dir.z * move_speed
 
 # ==============================
-# AREA3D DETECTION
+# AREA DETECTION
 # ==============================
 func _on_area_3d_body_entered(body):
 	if not body.is_in_group("player"):
@@ -164,13 +156,13 @@ func _on_area_3d_body_exited(body):
 # ==============================
 # ROTATION
 # ==============================
-func _rotate_to(body):
-	var pos = body.global_position
+func _rotate_to(body: Node3D):
+	var pos := body.global_position
 	pos.y = global_position.y
 	look_at(pos, Vector3.UP)
 
 # ==============================
-# SHOOTING (DOWNED-AWARE AIM)
+# SHOOTING
 # ==============================
 func _shoot():
 	can_shoot = false
@@ -187,10 +179,10 @@ func _shoot():
 	can_shoot = true
 
 func _get_aim_point(t: Node3D) -> Vector3:
-	var aim_pos = t.global_position
+	var aim_pos := t.global_position
 
 	if "state" in t and t.state == t.PlayerState.DOWNED:
-		aim_pos.y -= 0.5 # aim lower when downed
+		aim_pos.y -= 0.5
 
 	return aim_pos
 
@@ -206,7 +198,8 @@ func make_cop_dress():
 func _set_color(mesh, color):
 	if mesh == null or mesh.mesh == null:
 		return
-	for i in range(mesh.mesh.get_surface_count()):
+
+	for i in mesh.mesh.get_surface_count():
 		var mat = mesh.get_active_material(i)
 		if mat:
 			var new_mat = mat.duplicate()
@@ -233,6 +226,7 @@ func die(killer_id):
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
+
 	remove_from_group("enemy")
 	$CollisionShape3D.disabled = true
 	queue_free()
