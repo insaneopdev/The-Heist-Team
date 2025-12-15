@@ -16,6 +16,9 @@ extends CharacterBody3D
 @export var shoot_range := 12.0
 @export var shoot_delay := 0.6
 @export var gravity := 20.0
+@export var separation_radius := 1.2
+@export var separation_strength := 1.5
+
 
 # ==============================
 # STATE
@@ -113,13 +116,28 @@ func _move_direct(target_pos: Vector3, move_speed: float):
 	var dir := target_pos - global_position
 	dir.y = 0
 
-	if dir.length() < 0.5:
-		velocity = Vector3.ZERO
+	if dir.length() < 0.4:
+		velocity.x = 0
+		velocity.z = 0
 		return
 
 	dir = dir.normalized()
-	velocity.x = dir.x * move_speed
-	velocity.z = dir.z * move_speed
+
+	# ✅ APPLY SEPARATION
+	var separation :Vector3= _apply_separation()
+	separation.y = 0
+
+	# 🔑 combine movement + separation
+	var final_dir := dir + separation * separation_strength
+
+	# prevent zero-length direction
+	if final_dir.length() < 0.05:
+		final_dir = dir
+
+	final_dir = final_dir.normalized()
+
+	velocity.x = final_dir.x * move_speed
+	velocity.z = final_dir.z * move_speed
 
 # ==============================
 # TARGET SELECTION
@@ -234,3 +252,20 @@ func _set_color(mesh, color):
 			var new_mat = mat.duplicate()
 			new_mat.albedo_color = color
 			mesh.set_surface_override_material(i, new_mat)
+
+
+func _apply_separation():
+	var force := Vector3.ZERO
+
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if e == self:
+			continue
+		if not is_instance_valid(e):
+			continue
+
+		var dist := global_position.distance_to(e.global_position)
+		if dist > 0.0 and dist < separation_radius:
+			var push :Vector3= global_position - e.global_position
+			force += push.normalized() * (separation_radius - dist)
+
+	return force
