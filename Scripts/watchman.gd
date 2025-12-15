@@ -7,6 +7,9 @@ extends CharacterBody3D
 @onready var primary_gun = $pivot/primary_gun
 @onready var p_muzzle    = $pivot/primary_gun/gun_muzzle
 @onready var vision_area = $pivot/Area3D
+@onready var ray_f = $RayForward
+@onready var ray_l = $RayLeft
+@onready var ray_r = $RayRight
 
 # ==============================
 # EXPORTS
@@ -123,14 +126,16 @@ func _move_direct(target_pos: Vector3, move_speed: float):
 
 	dir = dir.normalized()
 
-	# ✅ APPLY SEPARATION
 	var separation :Vector3= _apply_separation()
 	separation.y = 0
 
-	# 🔑 combine movement + separation
-	var final_dir := dir + separation * separation_strength
+	var avoid := _wall_avoidance()
+	avoid.y = 0
 
-	# prevent zero-length direction
+	var final_dir := dir \
+		+ separation * separation_strength \
+		+ avoid
+
 	if final_dir.length() < 0.05:
 		final_dir = dir
 
@@ -138,7 +143,6 @@ func _move_direct(target_pos: Vector3, move_speed: float):
 
 	velocity.x = final_dir.x * move_speed
 	velocity.z = final_dir.z * move_speed
-
 # ==============================
 # TARGET SELECTION
 # ==============================
@@ -267,5 +271,19 @@ func _apply_separation():
 		if dist > 0.0 and dist < separation_radius:
 			var push :Vector3= global_position - e.global_position
 			force += push.normalized() * (separation_radius - dist)
+
+	return force
+
+func _wall_avoidance() -> Vector3:
+	var force := Vector3.ZERO
+
+	if ray_f.is_colliding():
+		force += ray_f.get_collision_normal() * 1.6
+
+	if ray_l.is_colliding():
+		force += ray_l.get_collision_normal() * 0.9
+
+	if ray_r.is_colliding():
+		force += ray_r.get_collision_normal() * 0.9
 
 	return force
