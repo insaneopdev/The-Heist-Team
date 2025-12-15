@@ -12,8 +12,8 @@ extends CharacterBody3D
 # EXPORTS
 # ==============================
 @export var Bullet_Scene: PackedScene
-@export var speed := 5.0
-@export var shoot_range := 12.0
+@export var speed := 4.0
+@export var shoot_range := 5.0
 @export var shoot_delay := 0.6
 @export var gravity := 20.0
 @export var separation_radius := 1.2
