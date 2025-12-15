@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 NetworkManager="*res://Scripts/NetworkManager.gd"
 GameManager="*res://Scripts/GameManager.gd"
+AlertManager="*res://Scripts/AlertManager.gd"
 
 [global_group]
 

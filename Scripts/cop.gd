@@ -6,8 +6,7 @@ extends CharacterBody3D
 @onready var pivot       = $pivot
 @onready var primary_gun = $pivot/primary_gun
 @onready var p_muzzle    = $pivot/primary_gun/gun_muzzle
-@onready var vision_area = $pivot/Area3D
-@onready var nav_agent   = $NavigationAgent3D
+@onready var vision_area = $pivot/Area3D   # PRIORITY ONLY (NOT DETECTION)
 
 # ==============================
 # EXPORTS
@@ -19,66 +18,63 @@ extends CharacterBody3D
 @export var gravity := 20.0
 
 # ==============================
-# STATES
+# STATE
 # ==============================
-var detected := false
 var target: Node3D = null
 var can_shoot := true
-
-# ==============================
-# SEARCH / CHASE
-# ==============================
-var last_player_pos := Vector3.ZERO
-var searching_lost_player := false
-var search_timer := 0.0
-var max_search_time := 2.0
-var chase_speed_multiplier := 1.35
-var search_arrival_dist := 1.0
-
-# ==============================
-# HEALTH
-# ==============================
 var health := 100
+
+# ==============================
+# PRIORITY TARGETS
+# ==============================
+var nearby_players: Array[Node3D] = []
 
 # ==============================
 # READY
 # ==============================
 func _ready():
 	GameManager.register_enemy()
+	add_to_group("enemy")
 	primary_gun.show()
 	make_cop_dress()
 
-	nav_agent.path_desired_distance = 0.3
-	nav_agent.target_desired_distance = 0.6
-	nav_agent.avoidance_enabled = false
-	nav_agent.target_position = global_position
+	# Area3D is ONLY for priority after alert
+	vision_area.monitoring = true
+	vision_area.monitorable = true
 
 # ==============================
 # PHYSICS LOOP
 # ==============================
 func _physics_process(delta):
-	if detected and target:
-		_detected_behavior()
-	elif searching_lost_player:
-		_search_behavior(delta)
-	else:
-		_idle_behavior()
+	# Server-authoritative AI
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
 
 	_apply_gravity(delta)
+
+	# 🔑 HARD GATE: cops do NOTHING until watchman raises alert
+	if not AlertManager.alert_active:
+		target = null
+		velocity.x = 0
+		velocity.z = 0
+		move_and_slide()
+		return
+
+	# After alert → normal combat logic
+	target = _get_priority_target()
+
+	if target != null:
+		_attack_behavior()
+	else:
+		velocity.x = 0
+		velocity.z = 0
+
 	move_and_slide()
 
 # ==============================
-# IDLE
+# ATTACK BEHAVIOR
 # ==============================
-func _idle_behavior():
-	velocity.x = 0
-	velocity.z = 0
-
-# ==============================
-# DETECTED / CHASE
-# ==============================
-func _detected_behavior():
-	last_player_pos = target.global_position
+func _attack_behavior():
 	_rotate_to(target)
 
 	var dist := global_position.distance_to(target.global_position)
@@ -90,39 +86,16 @@ func _detected_behavior():
 			_shoot()
 		return
 
-	nav_agent.target_position = target.global_position
-	_move_along_nav(speed)
+	_move_direct(target.global_position, speed)
 
 # ==============================
-# SEARCH
+# DIRECT MOVEMENT
 # ==============================
-func _search_behavior(delta):
-	search_timer += delta
-
-	nav_agent.target_position = last_player_pos
-	_move_along_nav(speed * chase_speed_multiplier)
-
-	if global_position.distance_to(last_player_pos) <= search_arrival_dist:
-		velocity.x = 0
-		velocity.z = 0
-
-		if search_timer >= max_search_time:
-			searching_lost_player = false
-
-# ==============================
-# NAVIGATION MOVEMENT
-# ==============================
-func _move_along_nav(move_speed: float):
-	if nav_agent.is_navigation_finished():
-		velocity.x = 0
-		velocity.z = 0
-		return
-
-	var next_pos: Vector3 = nav_agent.get_next_path_position()
-	var dir := next_pos - global_position
+func _move_direct(target_pos: Vector3, move_speed: float):
+	var dir := target_pos - global_position
 	dir.y = 0
 
-	if dir.length_squared() < 0.01:
+	if dir.length() < 0.4:
 		velocity.x = 0
 		velocity.z = 0
 		return
@@ -132,26 +105,55 @@ func _move_along_nav(move_speed: float):
 	velocity.z = dir.z * move_speed
 
 # ==============================
-# AREA DETECTION
+# TARGET PRIORITY
 # ==============================
-func _on_area_3d_body_entered(body):
-	if not body.is_in_group("player"):
+func _get_priority_target() -> Node3D:
+	# 1️⃣ Prefer players already close (Area3D)
+	if nearby_players.size() > 0:
+		return _get_nearest_from_array(nearby_players)
+
+	# 2️⃣ Otherwise nearest player globally
+	return _get_nearest_player()
+
+func _get_nearest_from_array(arr: Array) -> Node3D:
+	var nearest: Node3D = null
+	var min_dist := INF
+
+	for p in arr:
+		if not is_instance_valid(p):
+			continue
+		var d := global_position.distance_to(p.global_position)
+		if d < min_dist:
+			min_dist = d
+			nearest = p
+
+	return nearest
+
+func _get_nearest_player() -> Node3D:
+	var nearest: Node3D = null
+	var min_dist := INF
+
+	for p in get_tree().get_nodes_in_group("player"):
+		if not is_instance_valid(p):
+			continue
+		var d := global_position.distance_to(p.global_position)
+		if d < min_dist:
+			min_dist = d
+			nearest = p
+
+	return nearest
+
+# ==============================
+# AREA3D (PRIORITY ONLY)
+# ==============================
+func _on_Area3D_body_entered(body):
+	if not AlertManager.alert_active:
 		return
+	if body.is_in_group("player"):
+		nearby_players.append(body)
 
-	target = body
-	detected = true
-	searching_lost_player = false
-	search_timer = 0.0
-	last_player_pos = body.global_position
-
-func _on_area_3d_body_exited(body):
-	if body != target:
-		return
-
-	detected = false
-	target = null
-	searching_lost_player = true
-	search_timer = 0.0
+func _on_Area3D_body_exited(body):
+	nearby_players.erase(body)
 
 # ==============================
 # ROTATION
@@ -169,42 +171,12 @@ func _shoot():
 
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
-
-	var aim_point = _get_aim_point(target)
-	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
+	bullet.direction = (target.global_position - p_muzzle.global_position).normalized()
 
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
 	can_shoot = true
-
-func _get_aim_point(t: Node3D) -> Vector3:
-	var aim_pos := t.global_position
-
-	if "state" in t and t.state == t.PlayerState.DOWNED:
-		aim_pos.y -= 0.5
-
-	return aim_pos
-
-# ==============================
-# MATERIAL COLOR
-# ==============================
-func make_cop_dress():
-	var bean = $mesh/bean
-	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))
-	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3))
-	_set_color(bean.get_node("Torus"), Color.BLACK)
-
-func _set_color(mesh, color):
-	if mesh == null or mesh.mesh == null:
-		return
-
-	for i in mesh.mesh.get_surface_count():
-		var mat = mesh.get_active_material(i)
-		if mat:
-			var new_mat = mat.duplicate()
-			new_mat.albedo_color = color
-			mesh.set_surface_override_material(i, new_mat)
 
 # ==============================
 # GRAVITY
@@ -230,3 +202,22 @@ func die(killer_id):
 	remove_from_group("enemy")
 	$CollisionShape3D.disabled = true
 	queue_free()
+
+# ==============================
+# MATERIAL COLOR
+# ==============================
+func make_cop_dress():
+	var bean = $mesh/bean
+	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))
+	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3))
+	_set_color(bean.get_node("Torus"), Color.BLACK)
+
+func _set_color(mesh, color):
+	if mesh == null or mesh.mesh == null:
+		return
+	for i in range(mesh.mesh.get_surface_count()):
+		var mat = mesh.get_active_material(i)
+		if mat:
+			var new_mat = mat.duplicate()
+			new_mat.albedo_color = color
+			mesh.set_surface_override_material(i, new_mat)
