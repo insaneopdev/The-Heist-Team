@@ -7,9 +7,14 @@ extends CharacterBody3D
 @onready var primary_gun = $pivot/primary_gun
 @onready var p_muzzle    = $pivot/primary_gun/gun_muzzle
 @onready var vision_area = $pivot/Area3D
-@onready var ray_f = $RayForward
-@onready var ray_l = $RayLeft
-@onready var ray_r = $RayRight
+
+# --- RAYS ---
+@onready var ray_f_high = $Ray_F_High
+@onready var ray_l_high = $Ray_L_High
+@onready var ray_r_high = $Ray_R_High
+@onready var ray_f_low  = $Ray_F_Low
+@onready var ray_l_low  = $Ray_L_Low
+@onready var ray_r_low  = $Ray_R_Low
 
 # ==============================
 # EXPORTS
@@ -19,27 +24,24 @@ extends CharacterBody3D
 @export var shoot_range := 5.0
 @export var shoot_delay := 0.6
 @export var gravity := 20.0
-@export var separation_radius := 1.2
-@export var separation_strength := 1.5
 
+@export var separation_radius := 1.2
+@export var separation_strength := 1.1
 
 # ==============================
 # STATE
 # ==============================
 var detected := false
-var target: Node3D = null
+var target: Node3D
 var can_shoot := true
 var health := 100
 
-# ==============================
-# SEARCH
-# ==============================
 var last_player_pos := Vector3.ZERO
 var searching_lost_player := false
 var search_timer := 0.0
 var max_search_time := 2.0
-var chase_speed_multiplier := 1.35
-var search_arrival_dist := 1.0
+
+var last_move_dir := Vector3.ZERO
 
 # ==============================
 # READY
@@ -57,9 +59,10 @@ func _ready():
 # PHYSICS LOOP
 # ==============================
 func _physics_process(delta):
-	# 🔒 SERVER-ONLY AI
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
+
+	_apply_gravity(delta)
 
 	if detected:
 		_detected_behavior()
@@ -68,7 +71,6 @@ func _physics_process(delta):
 	else:
 		_idle_behavior()
 
-	_apply_gravity(delta)
 	move_and_slide()
 
 # ==============================
@@ -83,92 +85,96 @@ func _idle_behavior():
 # ==============================
 func _detected_behavior():
 	target = _get_nearest_player()
-	if target == null:
+	if not target:
 		return
 
 	last_player_pos = target.global_position
 	_rotate_to(target)
 
-	var dist := global_position.distance_to(target.global_position)
-
-	if dist <= shoot_range:
+	if global_position.distance_to(target.global_position) <= shoot_range:
 		velocity.x = 0
 		velocity.z = 0
 		if can_shoot:
 			_shoot()
 		return
 
-	_move_direct(target.global_position, speed)
+	_move(target.global_position)
 
 # ==============================
 # SEARCH
 # ==============================
 func _search_behavior(delta):
 	search_timer += delta
-	_move_direct(last_player_pos, speed * chase_speed_multiplier)
+	_move(last_player_pos)
 
-	if global_position.distance_to(last_player_pos) <= search_arrival_dist:
+	if global_position.distance_to(last_player_pos) < 1.0:
 		velocity = Vector3.ZERO
 		if search_timer >= max_search_time:
 			searching_lost_player = false
 
 # ==============================
-# MOVEMENT
+# COLLIDER-CENTRIC MOVEMENT (FIXED)
 # ==============================
-func _move_direct(target_pos: Vector3, move_speed: float):
-	var dir := target_pos - global_position
-	dir.y = 0
-
-	if dir.length() < 0.4:
-		velocity.x = 0
-		velocity.z = 0
+func _move(target_pos: Vector3):
+	var move_dir := target_pos - global_position
+	move_dir.y = 0
+	if move_dir.length() < 0.01:
 		return
+	move_dir = move_dir.normalized()
 
-	dir = dir.normalized()
+	var wall_normal := Vector3.ZERO
+	if ray_f_low.is_colliding():
+		wall_normal += ray_f_low.get_collision_normal()
+	if ray_l_low.is_colliding():
+		wall_normal += ray_l_low.get_collision_normal()
+	if ray_r_low.is_colliding():
+		wall_normal += ray_r_low.get_collision_normal()
 
-	var separation :Vector3= _apply_separation()
-	separation.y = 0
+	wall_normal.y = 0
 
-	var avoid := _wall_avoidance()
-	avoid.y = 0
+	if wall_normal != Vector3.ZERO:
+		move_dir = move_dir.slide(wall_normal.normalized())
 
-	var final_dir := dir \
-		+ separation * separation_strength \
-		+ avoid
+	# 🔥 THIS IS THE FIX 🔥
+	if move_dir.length() < 0.05 and wall_normal != Vector3.ZERO:
+		var tangent := wall_normal.cross(Vector3.UP).normalized()
+		if tangent.dot(target_pos - global_position) < 0:
+			tangent = -tangent
+		move_dir = tangent
 
-	if final_dir.length() < 0.05:
-		final_dir = dir
+	move_dir += _apply_separation() * separation_strength
 
-	final_dir = final_dir.normalized()
+	if move_dir.length() < 0.05:
+		move_dir = last_move_dir
 
-	velocity.x = final_dir.x * move_speed
-	velocity.z = final_dir.z * move_speed
+	last_move_dir = move_dir.normalized()
+
+	velocity.x = last_move_dir.x * speed
+	velocity.z = last_move_dir.z * speed
+
 # ==============================
 # TARGET SELECTION
 # ==============================
 func _get_nearest_player() -> Node3D:
-	var nearest: Node3D = null
-	var min_dist := INF
+	var best: Node3D
+	var best_d := INF
 
 	for p in get_tree().get_nodes_in_group("player"):
 		if not is_instance_valid(p):
 			continue
 		var d := global_position.distance_to(p.global_position)
-		if d < min_dist:
-			min_dist = d
-			nearest = p
+		if d < best_d:
+			best_d = d
+			best = p
 
-	return nearest
+	return best
 
 # ==============================
-# AREA3D DETECTION (WATCHMAN)
+# AREA DETECTION
 # ==============================
 func _on_Area3D_body_entered(body):
 	if not body.is_in_group("player"):
 		return
-	
-
-	# 🔒 ALERT MUST BE SERVER-SIDE
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 
@@ -178,7 +184,7 @@ func _on_Area3D_body_entered(body):
 	target = body
 	detected = true
 	searching_lost_player = false
-	search_timer = 0.0
+	search_timer = 0
 	last_player_pos = body.global_position
 
 func _on_Area3D_body_exited(body):
@@ -188,7 +194,7 @@ func _on_Area3D_body_exited(body):
 	detected = false
 	target = null
 	searching_lost_player = true
-	search_timer = 0.0
+	search_timer = 0
 
 # ==============================
 # ROTATION
@@ -207,7 +213,6 @@ func _shoot():
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
 	bullet.direction = (target.global_position - p_muzzle.global_position).normalized()
-
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
@@ -233,10 +238,20 @@ func die(killer_id):
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
-
-	remove_from_group("enemy")
-	$CollisionShape3D.disabled = true
 	queue_free()
+
+# ==============================
+# SEPARATION
+# ==============================
+func _apply_separation() -> Vector3:
+	var force := Vector3.ZERO
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if e == self or not is_instance_valid(e):
+			continue
+		var d := global_position.distance_to(e.global_position)
+		if d < separation_radius:
+			force += (global_position - e.global_position).normalized() * (separation_radius - d)
+	return force
 
 # ==============================
 # VISUALS
@@ -248,42 +263,11 @@ func make_watchman_dress():
 	_set_color(bean.get_node("Torus"), Color.BLACK)
 
 func _set_color(mesh, color):
-	if mesh == null or mesh.mesh == null:
+	if not mesh or not mesh.mesh:
 		return
-	for i in range(mesh.mesh.get_surface_count()):
+	for i in mesh.mesh.get_surface_count():
 		var mat = mesh.get_active_material(i)
 		if mat:
-			var new_mat = mat.duplicate()
-			new_mat.albedo_color = color
-			mesh.set_surface_override_material(i, new_mat)
-
-
-func _apply_separation():
-	var force := Vector3.ZERO
-
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if e == self:
-			continue
-		if not is_instance_valid(e):
-			continue
-
-		var dist := global_position.distance_to(e.global_position)
-		if dist > 0.0 and dist < separation_radius:
-			var push :Vector3= global_position - e.global_position
-			force += push.normalized() * (separation_radius - dist)
-
-	return force
-
-func _wall_avoidance() -> Vector3:
-	var force := Vector3.ZERO
-
-	if ray_f.is_colliding():
-		force += ray_f.get_collision_normal() * 1.6
-
-	if ray_l.is_colliding():
-		force += ray_l.get_collision_normal() * 0.9
-
-	if ray_r.is_colliding():
-		force += ray_r.get_collision_normal() * 0.9
-
-	return force
+			var nm = mat.duplicate()
+			nm.albedo_color = color
+			mesh.set_surface_override_material(i, nm)
