@@ -13,7 +13,6 @@ extends CharacterBody3D
 @onready var ray_f_low  = $Ray_F_Low
 @onready var ray_l_low  = $Ray_L_Low
 @onready var ray_r_low  = $Ray_R_Low
-@onready var ray_b_low  = $Ray_B_Low
 
 # ==============================
 # EXPORTS
@@ -41,12 +40,6 @@ var search_timer := 0.0
 var max_search_time := 2.0
 
 # ==============================
-# STUCK HANDLING
-# ==============================
-var stuck_time := 0.0
-var stuck_limit := 0.4
-
-# ==============================
 # READY
 # ==============================
 func _ready():
@@ -61,16 +54,6 @@ func _ready():
 	agent.path_desired_distance = 0.5
 	agent.target_desired_distance = 0.5
 	agent.avoidance_enabled = false
-	
-	# Setup raycasts
-	_setup_raycasts()
-
-func _setup_raycasts():
-	# Make sure raycasts are enabled and have proper collision detection
-	for ray in [ray_f_low, ray_l_low, ray_r_low, ray_b_low]:
-		if ray:
-			ray.enabled = true
-			ray.exclude_parent = true
 
 # ==============================
 # PHYSICS LOOP
@@ -82,7 +65,7 @@ func _physics_process(delta):
 	_apply_gravity(delta)
 
 	if detected:
-		_detected_behavior(delta)
+		_detected_behavior()
 	elif searching_lost_player:
 		_search_behavior(delta)
 	else:
@@ -100,126 +83,102 @@ func _idle_behavior():
 # ==============================
 # DETECTED
 # ==============================
-func _detected_behavior(delta: float):
+func _detected_behavior():
 	target = _get_nearest_player()
-	if not target or not is_instance_valid(target):
-		detected = false
-		searching_lost_player = true
-		search_timer = 0
+	if not target:
 		return
 
 	last_player_pos = target.global_position
 	_rotate_to(target)
 
-	var distance_to_target = global_position.distance_to(target.global_position)
-	if distance_to_target <= shoot_range:
+	if global_position.distance_to(target.global_position) <= shoot_range:
 		velocity = Vector3.ZERO
 		if can_shoot:
 			_shoot()
 		return
 
-	_move(target.global_position, delta)
+	_move(target.global_position)
 
 # ==============================
 # SEARCH
 # ==============================
-func _search_behavior(delta: float):
+func _search_behavior(delta):
 	search_timer += delta
-	
-	# If we have a last known position, move to it
-	if last_player_pos != Vector3.ZERO:
-		_move(last_player_pos, delta)
-		
-		# Check if we've reached the search position or time is up
-		if global_position.distance_to(last_player_pos) < 1.0 or search_timer >= max_search_time:
+	_move(last_player_pos)
+
+	if global_position.distance_to(last_player_pos) < 1.0:
+		velocity = Vector3.ZERO
+		if search_timer >= max_search_time:
 			searching_lost_player = false
-			last_player_pos = Vector3.ZERO
-			search_timer = 0.0
 
 # ==============================
-# MOVEMENT (NAV + RAY + STUCK)
+# MOVEMENT (NAV + RAY + GROUP IGNORE)
 # ==============================
-func _move(target_pos: Vector3, delta: float):
-	# Set navigation target
+func _move(target_pos: Vector3):
 	agent.target_position = target_pos
-	
-	# Wait for navigation to update
-	await get_tree().process_frame
-	
-	# Get next path position
-	var next_pos = agent.get_next_path_position()
-	var move_dir = (next_pos - global_position)
+
+	var next = agent.get_next_path_position()
+	var move_dir = (next - global_position)
 	move_dir.y = 0.0
-	
-	# Get directional vectors from pivot (enemy faces -Z)
+
 	var forward = -pivot.global_transform.basis.z.normalized()
-	var right   = pivot.global_transform.basis.x.normalized()
+	var right   =  pivot.global_transform.basis.x.normalized()
 	var left    = -right
-	var back    = -forward  # Since forward is -Z, back is +Z
-	
-	# Normalize move direction if it's significant
+
+	# NAVIGATION
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
 	else:
-		# If no movement from nav, use forward direction
 		move_dir = forward
-	
-	# Check raycast collisions
+
+	# RAY STATES (with steps filtering)
 	var front_blocked = ray_f_low.is_colliding() and not _is_step(ray_f_low)
 	var left_blocked  = ray_l_low.is_colliding() and not _is_step(ray_l_low)
 	var right_blocked = ray_r_low.is_colliding() and not _is_step(ray_r_low)
-	var back_blocked  = ray_b_low.is_colliding() and not _is_step(ray_b_low)
-	
-	# Obstacle avoidance logic
-	if front_blocked:
-		if not left_blocked:
-			# Favor going left if front is blocked
-			move_dir = (forward + left * 1.5).normalized()
-		elif not right_blocked:
-			# Try right if left is also blocked
-			move_dir = (forward + right * 1.5).normalized()
-		elif not back_blocked:
-			# Back up if all front directions are blocked
-			move_dir = back
-		else:
-			# Completely stuck, try to rotate
-			move_dir = left
-	
+
+	# ==============================
+	# 3-WAY CONDITIONAL LOGIC
+	# ==============================
+
+	# FRONT + RIGHT BLOCKED → GO LEFT
+	if front_blocked and right_blocked and not left_blocked:
+		move_dir = left
+
+	# FRONT + LEFT BLOCKED → GO RIGHT
+	elif front_blocked and left_blocked and not right_blocked:
+		move_dir = right
+
+	# LEFT + RIGHT BLOCKED → PUSH FORWARD
+	elif left_blocked and right_blocked and not front_blocked:
+		move_dir = forward
+
+	# JUST FRONT BLOCKED → soften push
+	elif front_blocked and not left_blocked and not right_blocked:
+		move_dir = forward * 0.6
+
+	# JUST LEFT BLOCKED → nudge right
 	elif left_blocked and not right_blocked:
-		# Avoid left obstacle
-		move_dir = (move_dir + right * 0.5).normalized()
-	
+		move_dir = (move_dir + right * 0.8).normalized()
+
+	# JUST RIGHT BLOCKED → nudge left
 	elif right_blocked and not left_blocked:
-		# Avoid right obstacle
-		move_dir = (move_dir + left * 0.5).normalized()
-	
-	# Apply separation from other enemies
+		move_dir = (move_dir + left * 0.8).normalized()
+
+	# ==============================
+	# SEPARATION
+	# ==============================
 	move_dir += _apply_separation() * separation_strength
-	
-	# Stuck detection
-	if move_dir.length() < 0.1 and velocity.length() < 0.1:
-		stuck_time += delta
-	else:
-		stuck_time = 0.0
-	
-	# If stuck, try different direction
-	if stuck_time >= stuck_limit:
-		stuck_time = 0.0
-		# Try moving perpendicular to current direction
-		move_dir = left if randf() > 0.5 else right
-		# Add some randomness
-		move_dir = move_dir.rotated(Vector3.UP, randf_range(-PI/4, PI/4))
-	
-	# Apply movement
+
+	# ==============================
+	# ANTI-STUCK
+	# ==============================
+	if move_dir.length() < 0.2:
+		move_dir = forward
+
+	# APPLY
 	move_dir = move_dir.normalized()
 	velocity.x = move_dir.x * speed
 	velocity.z = move_dir.z * speed
-	
-	# Rotate to face movement direction (but only if moving significantly)
-	if velocity.length() > 0.5:
-		var look_dir = Vector3(velocity.x, 0, velocity.z).normalized()
-		if look_dir.length() > 0.01:
-			pivot.look_at(global_position - look_dir, Vector3.UP)
 
 # ==============================
 # GROUP FILTER FUNCTION
@@ -238,21 +197,10 @@ func _get_nearest_player() -> Node3D:
 	for p in get_tree().get_nodes_in_group("player"):
 		if not is_instance_valid(p):
 			continue
-		# Check line of sight
-		var space_state = get_world_3d().direct_space_state
-		var query = PhysicsRayQueryParameters3D.create(
-			global_position + Vector3.UP * 0.5,  # Slightly above ground
-			p.global_position + Vector3.UP * 0.5
-		)
-		query.exclude = [self]
-		var result = space_state.intersect_ray(query)
-		
-		# If we have direct line of sight or hit the player
-		if result.is_empty() or result.collider == p:
-			var d := global_position.distance_to(p.global_position)
-			if d < best_d:
-				best_d = d
-				best = p
+		var d := global_position.distance_to(p.global_position)
+		if d < best_d:
+			best_d = d
+			best = p
 
 	return best
 
@@ -282,7 +230,6 @@ func _on_Area3D_body_exited(body):
 	target = null
 	searching_lost_player = true
 	search_timer = 0
-	# Keep last_player_pos for searching
 
 # ==============================
 # ROTATION
@@ -296,9 +243,6 @@ func _rotate_to(body: Node3D):
 # SHOOTING
 # ==============================
 func _shoot():
-	if not target or not is_instance_valid(target):
-		return
-	
 	can_shoot = false
 
 	var bullet = Bullet_Scene.instantiate()
@@ -315,9 +259,6 @@ func _shoot():
 func _apply_gravity(delta):
 	if not is_on_floor():
 		velocity.y -= gravity * delta
-	else:
-		# Keep slight downward velocity to stay on floor
-		velocity.y = -0.1
 
 # ==============================
 # DAMAGE
@@ -339,19 +280,12 @@ func die(killer_id):
 # ==============================
 func _apply_separation() -> Vector3:
 	var force := Vector3.ZERO
-	var count := 0
-	
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if e == self or not is_instance_valid(e):
 			continue
 		var d := global_position.distance_to(e.global_position)
-		if d < separation_radius and d > 0:
+		if d < separation_radius:
 			force += (global_position - e.global_position).normalized() * (separation_radius - d)
-			count += 1
-	
-	if count > 0:
-		force /= count
-	
 	return force
 
 # ==============================
@@ -359,10 +293,9 @@ func _apply_separation() -> Vector3:
 # ==============================
 func make_watchman_dress():
 	var bean = $mesh/bean
-	if bean:
-		_set_color(bean.get_node("Sphere"), Color(0.4, 0.6, 1.0))
-		_set_color(bean.get_node("Sphere_003"), Color(0.05, 0.05, 0.1))
-		_set_color(bean.get_node("Torus"), Color.BLACK)
+	_set_color(bean.get_node("Sphere"), Color(0.4, 0.6, 1.0))
+	_set_color(bean.get_node("Sphere_003"), Color(0.05, 0.05, 0.1))
+	_set_color(bean.get_node("Torus"), Color.BLACK)
 
 func _set_color(mesh, color):
 	if not mesh or not mesh.mesh:

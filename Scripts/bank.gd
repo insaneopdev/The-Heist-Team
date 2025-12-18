@@ -2,10 +2,10 @@ extends Node3D
 
 @export var player_scene : PackedScene
 @onready var spawn_points := $SpawnPoints.get_children()
-@onready var anim = $bank/AnimationPlayer
-@onready var drill = $bank/drill
-@onready var particles = $bank/GPUParticles3D
-@onready var timer = $bank/drilltime
+@onready var anim = $NavigationRegion3D/bank/AnimationPlayer
+@onready var drill = $NavigationRegion3D/bank/drill
+@onready var particles = $NavigationRegion3D/bank/GPUParticles3D
+@onready var timer = $NavigationRegion3D/bank/drilltime
 @onready var label = $Area3D/Label3D
 
 var current_state = 0
