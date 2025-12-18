@@ -337,7 +337,14 @@ func check_all_dead():
 		if p.state != PlayerState.SPECTATING: alive_count += 1
 	if alive_count == 0: all_dead()
 
-func all_dead(): print("GAME OVER - ALL DEAD")
+func all_dead():
+	print("GAME OVER - ALL DEAD")
+	
+	# Only the Host triggers the game over sequence to avoid conflicts
+	if multiplayer.is_server():
+		# Call GameManager to end game. 
+		# Passing 'false' tells the End Screen it was a FAILURE.
+		GameManager.rpc("end_game", false)
 
 func spectate_behavior():
 	if Input.is_action_just_pressed("shoot"): switch_spectator_target()

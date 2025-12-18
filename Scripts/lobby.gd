@@ -1,12 +1,13 @@
 extends Control
 
 # NODES
-@onready var status_label = $PanelContainer/VBoxContainer/StatusLabel
-@onready var name_input = $PanelContainer/VBoxContainer/NameInput
-@onready var code_input = $PanelContainer/VBoxContainer/CodeInput
-@onready var start_btn = $PanelContainer/VBoxContainer/StartBtn
-@onready var player_list_label = $PanelContainer/VBoxContainer/PlayerListLabel
-# REMOVE: connect_btn (You can delete it from the scene)
+@onready var status_label = $StatusLabel
+@onready var name_input = $NameInput
+@onready var code_input = $CodeInput
+@onready var start_btn = $StartBtn
+@onready var player_list_label = $PlayerListLabel
+
+var id
 
 func _ready():
 	start_btn.hide()
@@ -16,8 +17,12 @@ func _ready():
 	
 	status_label.text = "Auto-Connecting..."
 
+func _process(delta: float) -> void:
+	$SubViewportContainer/SubViewport/bean/NameLabel.text = name_input.text
+
 func _on_connected(my_id):
 	status_label.text = "Connected! Your ID: " + str(my_id)
+	id = my_id
 
 func _on_fail():
 	status_label.text = "Connection Failed. Check Internet."
@@ -34,7 +39,7 @@ func _on_create_btn_pressed():
 	# Pass Name to NetworkManager
 	NetworkManager.start_host(name_input.text)
 	
-	status_label.text = "Room Ready!"
+	status_label.text = "Room Ready! Room ID: " + str(id)
 	start_btn.show()
 
 # 2. JOIN ROOM

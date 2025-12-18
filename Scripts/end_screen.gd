@@ -1,9 +1,9 @@
 extends Control
 
-@onready var title = $Panel/Title
-@onready var stats_label = $Panel/Stats
-@onready var mvp_label = $Panel/MVP
-@onready var lobby_btn = $Panel/LobbyBtn
+@onready var title = $Title
+@onready var stats_label = $Stats
+@onready var mvp_label = $MVP
+@onready var lobby_btn = $LobbyBtn
 
 func _ready():
 	# Decide MVP
