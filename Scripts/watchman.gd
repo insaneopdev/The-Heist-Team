@@ -7,6 +7,7 @@ extends CharacterBody3D
 @onready var primary_gun = $pivot/primary_gun
 @onready var p_muzzle    = $pivot/primary_gun/gun_muzzle
 @onready var vision_area = $pivot/Area3D
+@onready var agent       = $NavigationAgent3D
 
 # --- RAYS ---
 @onready var ray_f_high = $Ray_F_High
@@ -41,8 +42,6 @@ var searching_lost_player := false
 var search_timer := 0.0
 var max_search_time := 2.0
 
-var last_move_dir := Vector3.ZERO
-
 # ==============================
 # READY
 # ==============================
@@ -54,6 +53,10 @@ func _ready():
 
 	vision_area.monitoring = true
 	vision_area.monitorable = true
+
+	agent.path_desired_distance = 0.5
+	agent.target_desired_distance = 0.5
+	agent.avoidance_enabled = false
 
 # ==============================
 # PHYSICS LOOP
@@ -113,44 +116,50 @@ func _search_behavior(delta):
 			searching_lost_player = false
 
 # ==============================
-# COLLIDER-CENTRIC MOVEMENT (FIXED)
+# NAVIGATE + RAYCAST AVOIDANCE
 # ==============================
 func _move(target_pos: Vector3):
-	var move_dir := target_pos - global_position
+	agent.target_position = target_pos
+	var next = agent.get_next_path_position()
+	var move_dir = (next - global_position)
 	move_dir.y = 0
-	if move_dir.length() < 0.01:
-		return
+
+	# If no path movement, default to forward (-Z)
+	if move_dir.length() > 0.01:
+		move_dir = move_dir.normalized()
+	else:
+		move_dir = -pivot.global_transform.basis.z.normalized()
+
+	# ---- RAY AVOIDANCE ----
+	var avoid := Vector3.ZERO
+
+	if ray_f_low.is_colliding():
+		avoid += ray_f_low.get_collision_normal()
+	if ray_l_low.is_colliding():
+		avoid += ray_l_low.get_collision_normal() * 0.4
+	if ray_r_low.is_colliding():
+		avoid += ray_r_low.get_collision_normal() * 0.4
+
+	avoid.y = 0
+
+	if avoid != Vector3.ZERO:
+		var slid = move_dir.slide(avoid.normalized())
+		if slid.dot(move_dir) > 0:
+			move_dir = slid
+		else:
+			move_dir = (pivot.global_transform.basis.x * sign(randf() - 0.5)).normalized()
+
+	# ---- FORCE FORWARD (-Z) ----
+	var forward = -pivot.global_transform.basis.z.normalized()
+	move_dir = (move_dir + forward * 0.15).normalized()
+
+	# ---- SEPARATION ----
+	move_dir += _apply_separation() * separation_strength
 	move_dir = move_dir.normalized()
 
-	var wall_normal := Vector3.ZERO
-	if ray_f_low.is_colliding():
-		wall_normal += ray_f_low.get_collision_normal()
-	if ray_l_low.is_colliding():
-		wall_normal += ray_l_low.get_collision_normal()
-	if ray_r_low.is_colliding():
-		wall_normal += ray_r_low.get_collision_normal()
-
-	wall_normal.y = 0
-
-	if wall_normal != Vector3.ZERO:
-		move_dir = move_dir.slide(wall_normal.normalized())
-
-	# 🔥 THIS IS THE FIX 🔥
-	if move_dir.length() < 0.05 and wall_normal != Vector3.ZERO:
-		var tangent := wall_normal.cross(Vector3.UP).normalized()
-		if tangent.dot(target_pos - global_position) < 0:
-			tangent = -tangent
-		move_dir = tangent
-
-	move_dir += _apply_separation() * separation_strength
-
-	if move_dir.length() < 0.05:
-		move_dir = last_move_dir
-
-	last_move_dir = move_dir.normalized()
-
-	velocity.x = last_move_dir.x * speed
-	velocity.z = last_move_dir.z * speed
+	# ---- APPLY ----
+	velocity.x = move_dir.x * speed
+	velocity.z = move_dir.z * speed
 
 # ==============================
 # TARGET SELECTION

@@ -7,6 +7,7 @@ extends CharacterBody3D
 @onready var primary_gun  = $pivot/primary_gun
 @onready var p_muzzle     = $pivot/primary_gun/gun_muzzle
 @onready var vision_area  = $pivot/Area3D
+@onready var agent        = $NavigationAgent3D
 
 # --- RAYS ---
 @onready var ray_f_high = $Ray_F_High
@@ -34,8 +35,6 @@ extends CharacterBody3D
 var target: Node3D
 var can_shoot := true
 var health := 100
-var last_move_dir := Vector3.ZERO
-
 var nearby_players: Array[Node3D] = []
 
 # =====================================================
@@ -49,6 +48,9 @@ func _ready():
 
 	vision_area.monitoring = true
 	vision_area.monitorable = true
+	
+	agent.path_desired_distance = 0.5
+	agent.target_desired_distance = 0.5
 
 # =====================================================
 # PHYSICS LOOP
@@ -89,44 +91,52 @@ func _attack_behavior():
 	_move(target.global_position)
 
 # =====================================================
-# COLLIDER-CENTRIC MOVEMENT (FIXED)
+# MOVEMENT WITH NAVIGATION + RAY AVOIDANCE
 # =====================================================
 func _move(target_pos: Vector3):
-	var move_dir := target_pos - global_position
+	agent.target_position = target_pos
+
+	var next = agent.get_next_path_position()
+	var move_dir = (next - global_position)
 	move_dir.y = 0
-	if move_dir.length() < 0.01:
-		return
+
+	if move_dir.length() > 0.01:
+		move_dir = move_dir.normalized()
+	else:
+		# default forward (-Z)
+		move_dir = -pivot.global_transform.basis.z.normalized()
+
+	# ---- RAY AVOIDANCE ----
+	var avoid := Vector3.ZERO
+
+	if ray_f_low.is_colliding():
+		avoid += ray_f_low.get_collision_normal()
+
+	if ray_l_low.is_colliding():
+		avoid += ray_l_low.get_collision_normal() * 0.4
+
+	if ray_r_low.is_colliding():
+		avoid += ray_r_low.get_collision_normal() * 0.4
+
+	avoid.y = 0
+
+	if avoid != Vector3.ZERO:
+		var slid = move_dir.slide(avoid.normalized())
+		if slid.dot(move_dir) > 0:
+			move_dir = slid
+		else:
+			move_dir = (pivot.global_transform.basis.x * sign(randf() - 0.5)).normalized()
+
+	# ---- FORCE FORWARD (-Z) BLEND ----
+	var forward = -pivot.global_transform.basis.z.normalized()
+	move_dir = (move_dir + forward * 0.15).normalized()
+
+	# ---- SEPARATION ----
+	move_dir += _apply_separation() * separation_strength
 	move_dir = move_dir.normalized()
 
-	var wall_normal := Vector3.ZERO
-	if ray_f_low.is_colliding():
-		wall_normal += ray_f_low.get_collision_normal()
-	if ray_l_low.is_colliding():
-		wall_normal += ray_l_low.get_collision_normal()
-	if ray_r_low.is_colliding():
-		wall_normal += ray_r_low.get_collision_normal()
-
-	wall_normal.y = 0
-
-	if wall_normal != Vector3.ZERO:
-		move_dir = move_dir.slide(wall_normal.normalized())
-
-	# 🔥 THIS IS THE FIX 🔥
-	if move_dir.length() < 0.05 and wall_normal != Vector3.ZERO:
-		var tangent := wall_normal.cross(Vector3.UP).normalized()
-		if tangent.dot(target_pos - global_position) < 0:
-			tangent = -tangent
-		move_dir = tangent
-
-	move_dir += _apply_separation() * separation_strength
-
-	if move_dir.length() < 0.05:
-		move_dir = last_move_dir
-
-	last_move_dir = move_dir.normalized()
-
-	velocity.x = last_move_dir.x * speed
-	velocity.z = last_move_dir.z * speed
+	velocity.x = move_dir.x * speed
+	velocity.z = move_dir.z * speed
 
 # =====================================================
 # TARGET PRIORITY
@@ -222,9 +232,10 @@ func _set_color(mesh, color):
 			var nm = m.duplicate()
 			nm.albedo_color = color
 			mesh.set_surface_override_material(i, nm)
-# ==============================
+
+# =====================================================
 # SEPARATION
-# ==============================
+# =====================================================
 func _apply_separation() -> Vector3:
 	var force := Vector3.ZERO
 	for e in get_tree().get_nodes_in_group("enemy"):
