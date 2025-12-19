@@ -70,17 +70,33 @@ func _physics_process(delta):
 # ATTACK
 # ==============================
 func _attack_behavior():
-	_rotate_to(target)
-
 	var dist := global_position.distance_to(target.global_position)
+	var los := has_los_to_target(target)
 
-	if dist <= shoot_range:
+	# ░░░ LOS VALID → rotate to player ░░░
+	if los:
+		_rotate_to(target)
+	else:
+		# ░░░ LOS BLOCKED → rotate to nav direction instead ░░░
+		var next = agent.get_next_path_position()
+		var move_dir = (next - global_position)
+		move_dir.y = 0.0
+		_rotate_to_movement(move_dir)
+
+	if los:
+		if dist <= shoot_range:
+			velocity = Vector3.ZERO
+			if can_shoot:
+				_shoot()
+			return
+		else:
+			_move(target.global_position)
+			return
+
+	if dist > 2.0:
+		_move(target.global_position)
+	else:
 		velocity = Vector3.ZERO
-		if can_shoot:
-			_shoot()
-		return
-
-	_move(target.global_position)
 
 # ==============================
 # MOVEMENT (NAV + SEPARATION)
@@ -143,6 +159,12 @@ func _rotate_to(body: Node3D):
 	var pos := body.global_position
 	pos.y = global_position.y
 	look_at(pos, Vector3.UP)
+	
+func _rotate_to_movement(move_dir: Vector3):
+	if move_dir.length() > 0.1:
+		var target_rotation = atan2(move_dir.x, move_dir.z)
+		rotation.y = lerp_angle(rotation.y, target_rotation, 0.15)
+
 
 # ==============================
 # SHOOTING (DOWNED-AWARE AIM)
@@ -230,3 +252,25 @@ func _set_color(mesh, color):
 			var nm = mat.duplicate()
 			nm.albedo_color = color
 			mesh.set_surface_override_material(i, nm)
+
+# ==============================
+# LOS
+# ==============================
+func has_los_to_target(t: Node3D) -> bool:
+	if not is_instance_valid(t):
+		return false
+
+	var from_pos = global_position + Vector3.UP * 1.2
+	var to_pos   = t.global_position + Vector3.UP * 1.2
+
+	var query := PhysicsRayQueryParameters3D.new()
+	query.from = from_pos
+	query.to = to_pos
+	query.exclude = [ self ]  # ignore our own collider
+
+	var result = get_world_3d().direct_space_state.intersect_ray(query)
+
+	if result.is_empty():
+		return true
+	else:
+		return false
