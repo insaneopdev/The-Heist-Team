@@ -145,18 +145,37 @@ func _rotate_to(body: Node3D):
 	look_at(pos, Vector3.UP)
 
 # ==============================
-# SHOOTING
+# SHOOTING (DOWNED-AWARE AIM)
 # ==============================
 func _shoot():
 	can_shoot = false
 
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
-	bullet.direction = (target.global_position - p_muzzle.global_position).normalized()
+
+	var aim_point = _get_aim_point(target)
+	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
+
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
 	can_shoot = true
+
+
+# ==============================
+# AIM LOGIC
+# ==============================
+func _get_aim_point(t: Node3D) -> Vector3:
+	if not is_instance_valid(t):
+		return p_muzzle.global_position
+
+	var aim_pos = t.global_position
+
+	if "state" in t and t.state == t.PlayerState.DOWNED:
+		aim_pos.y -= 0.5
+
+	return aim_pos
+
 
 # ==============================
 # GRAVITY
