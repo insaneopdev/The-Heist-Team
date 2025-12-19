@@ -9,11 +9,6 @@ extends CharacterBody3D
 @onready var vision_area = $pivot/Area3D
 @onready var agent       = $NavigationAgent3D
 
-# --- LOW RAYS ONLY ---
-@onready var ray_f_low  = $Ray_F_Low
-@onready var ray_l_low  = $Ray_L_Low
-@onready var ray_r_low  = $Ray_R_Low
-
 # ==============================
 # EXPORTS
 # ==============================
@@ -53,7 +48,7 @@ func _ready():
 
 	agent.path_desired_distance = 0.5
 	agent.target_desired_distance = 0.5
-	agent.avoidance_enabled = false
+	agent.avoidance_enabled = true
 
 # ==============================
 # PHYSICS LOOP
@@ -112,7 +107,7 @@ func _search_behavior(delta):
 			searching_lost_player = false
 
 # ==============================
-# MOVEMENT (NAV + RAY + GROUP IGNORE)
+# MOVEMENT (NAV + SEPARATION)
 # ==============================
 func _move(target_pos: Vector3):
 	agent.target_position = target_pos
@@ -121,71 +116,19 @@ func _move(target_pos: Vector3):
 	var move_dir = (next - global_position)
 	move_dir.y = 0.0
 
-	var forward = -pivot.global_transform.basis.z.normalized()
-	var right   =  pivot.global_transform.basis.x.normalized()
-	var left    = -right
-
 	# NAVIGATION
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
 	else:
-		move_dir = forward
+		move_dir = -pivot.global_transform.basis.z.normalized()
 
-	# RAY STATES (with steps filtering)
-	var front_blocked = ray_f_low.is_colliding() and not _is_step(ray_f_low)
-	var left_blocked  = ray_l_low.is_colliding() and not _is_step(ray_l_low)
-	var right_blocked = ray_r_low.is_colliding() and not _is_step(ray_r_low)
-
-	# ==============================
-	# 3-WAY CONDITIONAL LOGIC
-	# ==============================
-
-	# FRONT + RIGHT BLOCKED → GO LEFT
-	if front_blocked and right_blocked and not left_blocked:
-		move_dir = left
-
-	# FRONT + LEFT BLOCKED → GO RIGHT
-	elif front_blocked and left_blocked and not right_blocked:
-		move_dir = right
-
-	# LEFT + RIGHT BLOCKED → PUSH FORWARD
-	elif left_blocked and right_blocked and not front_blocked:
-		move_dir = forward
-
-	# JUST FRONT BLOCKED → soften push
-	elif front_blocked and not left_blocked and not right_blocked:
-		move_dir = forward * 0.6
-
-	# JUST LEFT BLOCKED → nudge right
-	elif left_blocked and not right_blocked:
-		move_dir = (move_dir + right * 0.8).normalized()
-
-	# JUST RIGHT BLOCKED → nudge left
-	elif right_blocked and not left_blocked:
-		move_dir = (move_dir + left * 0.8).normalized()
-
-	# ==============================
 	# SEPARATION
-	# ==============================
 	move_dir += _apply_separation() * separation_strength
 
-	# ==============================
-	# ANTI-STUCK
-	# ==============================
-	if move_dir.length() < 0.2:
-		move_dir = forward
-
-	# APPLY
 	move_dir = move_dir.normalized()
+
 	velocity.x = move_dir.x * speed
 	velocity.z = move_dir.z * speed
-
-# ==============================
-# GROUP FILTER FUNCTION
-# ==============================
-func _is_step(ray: RayCast3D) -> bool:
-	var c = ray.get_collider()
-	return c and c.is_in_group("steps")
 
 # ==============================
 # TARGETING
