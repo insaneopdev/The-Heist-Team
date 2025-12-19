@@ -29,6 +29,11 @@ var can_shoot := true
 var health := 100
 var nearby_players: Array[Node3D] = []
 
+var _los_cache := false
+var _los_timer := 0.0
+var _los_interval := 0.08
+
+
 # ==============================
 # READY
 # ==============================
@@ -62,41 +67,69 @@ func _physics_process(delta):
 
 	target = _get_priority_target()
 	if target:
-		_attack_behavior()
+		_attack_behavior(delta)
 
 	move_and_slide()
 
 # ==============================
 # ATTACK
 # ==============================
-func _attack_behavior():
+func _attack_behavior(delta):
 	var dist := global_position.distance_to(target.global_position)
-	var los := has_los_to_target(target)
 
-	# ░░░ LOS VALID → rotate to player ░░░
-	if los:
-		_rotate_to(target)
-	else:
-		# ░░░ LOS BLOCKED → rotate to nav direction instead ░░░
-		var next = agent.get_next_path_position()
-		var move_dir = (next - global_position)
-		move_dir.y = 0.0
-		_rotate_to_movement(move_dir)
+	# refresh LOS every 0.08s (prevents flicker + saves performance)
+	_los_timer -= delta
+	if _los_timer <= 0.0:
+		_los_cache = has_los_to_target(target)
+		_los_timer = _los_interval
 
-	if los:
-		if dist <= shoot_range:
-			velocity = Vector3.ZERO
+	var los := _los_cache
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS BLOCKED → IGNORE SHOOT RANGE → FOLLOW ░░░
+	# ────────────────────────────────────────────────
+	if not los:
+
+		# if far → move + rotate by movement
+		if dist > 2.0:
+			_move(target.global_position)
+
+			var next = agent.get_next_path_position()
+			var move_dir = (next - global_position)
+			move_dir.y = 0.0
+
+			_rotate_to_movement(move_dir)
+			return
+
+		# if close but LOS blocked → attempt short LOS
+		velocity = Vector3.ZERO
+		if _has_short_los_to_target(target, 2.5):
+			_rotate_to(target)
 			if can_shoot:
 				_shoot()
-			return
 		else:
-			_move(target.global_position)
-			return
+			# hold position facing movement direction (optional)
+			_rotate_to_movement(-pivot.global_transform.basis.z)
+		return
 
-	if dist > 2.0:
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR → ROTATE TO TARGET ░░░
+	# ────────────────────────────────────────────────
+	_rotate_to(target)
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR + TOO FAR → CLOSE DISTANCE ░░░
+	# ────────────────────────────────────────────────
+	if dist > shoot_range:
 		_move(target.global_position)
-	else:
-		velocity = Vector3.ZERO
+		return
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR + CLOSE → SHOOT ░░░
+	# ────────────────────────────────────────────────
+	velocity = Vector3.ZERO
+	if can_shoot:
+		_shoot()
 
 # ==============================
 # MOVEMENT (NAV + SEPARATION)
@@ -111,7 +144,23 @@ func _move(target_pos: Vector3):
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
 	else:
-		move_dir = -pivot.global_transform.basis.z.normalized()
+		# no path info from navigation → fallback to direct chase direction
+		var chase_dir = (target_pos - global_position)
+		chase_dir.y = 0.0
+		if chase_dir.length() > 0.1:
+			move_dir = chase_dir.normalized()
+		else:
+			return
+
+	# separation
+	move_dir += _apply_separation() * separation_strength
+	move_dir = move_dir.normalized()
+
+	velocity.x = move_dir.x * speed
+	velocity.z = move_dir.z * speed
+
+
+
 
 	# separation
 	move_dir += _apply_separation() * separation_strength
@@ -162,8 +211,9 @@ func _rotate_to(body: Node3D):
 	
 func _rotate_to_movement(move_dir: Vector3):
 	if move_dir.length() > 0.1:
-		var target_rotation = atan2(move_dir.x, move_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_rotation, 0.15)
+		var target_y = atan2(move_dir.x, move_dir.z)
+		rotation.y = lerp_angle(rotation.y, target_y, 0.07)
+
 
 
 # ==============================
@@ -266,11 +316,33 @@ func has_los_to_target(t: Node3D) -> bool:
 	var query := PhysicsRayQueryParameters3D.new()
 	query.from = from_pos
 	query.to = to_pos
-	query.exclude = [ self ]  # ignore our own collider
+	query.exclude = [ self ]
 
 	var result = get_world_3d().direct_space_state.intersect_ray(query)
 
 	if result.is_empty():
 		return true
-	else:
+
+	var hit = result.collider
+	return hit == t
+	
+func _has_short_los_to_target(t: Node3D, max_dist: float) -> bool:
+	if not is_instance_valid(t):
 		return false
+
+	var from_pos = p_muzzle.global_position
+	var to_pos = t.global_position + Vector3.UP * 1.2
+
+	if from_pos.distance_to(to_pos) > max_dist:
+		return false
+
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = from_pos
+	q.to = to_pos
+	q.exclude = [ self ]
+
+	var result = get_world_3d().direct_space_state.intersect_ray(q)
+	if result.is_empty():
+		return true
+
+	return result.collider == t
