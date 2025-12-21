@@ -9,12 +9,6 @@ extends CharacterBody3D
 @onready var vision_area  = $pivot/Area3D
 @onready var agent        = $NavigationAgent3D
 
-# ---- LOW RAYS ONLY ----
-@onready var ray_f_low = $Ray_F_Low
-@onready var ray_l_low = $Ray_L_Low
-@onready var ray_r_low = $Ray_R_Low
-@onready var ray_b_low = $Ray_B_Low
-
 # ==============================
 # EXPORTS
 # ==============================
@@ -35,12 +29,10 @@ var can_shoot := true
 var health := 100
 var nearby_players: Array[Node3D] = []
 
-# ==============================
-# STUCK HANDLING
-# ==============================
-var stuck_time := 0.0
-var stuck_limit := 0.4
-var is_stuck := false
+var _los_cache := false
+var _los_timer := 0.0
+var _los_interval := 0.08
+
 
 # ==============================
 # READY
@@ -56,7 +48,7 @@ func _ready():
 
 	agent.path_desired_distance = 0.4
 	agent.target_desired_distance = 0.4
-	agent.avoidance_enabled = false
+	agent.avoidance_enabled = true
 
 # ==============================
 # PHYSICS
@@ -75,28 +67,72 @@ func _physics_process(delta):
 
 	target = _get_priority_target()
 	if target:
-		_attack_behavior()
+		_attack_behavior(delta)
 
 	move_and_slide()
 
 # ==============================
 # ATTACK
 # ==============================
-func _attack_behavior():
-	_rotate_to(target)
-
+func _attack_behavior(delta):
 	var dist := global_position.distance_to(target.global_position)
 
-	if dist <= shoot_range:
+	# refresh LOS every 0.08s (prevents flicker + saves performance)
+	_los_timer -= delta
+	if _los_timer <= 0.0:
+		_los_cache = has_los_to_target(target)
+		_los_timer = _los_interval
+
+	var los := _los_cache
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS BLOCKED → IGNORE SHOOT RANGE → FOLLOW ░░░
+	# ────────────────────────────────────────────────
+	if not los:
+
+		# if far → move + rotate by movement
+		if dist > 2.0:
+			_move(target.global_position)
+
+			var next = agent.get_next_path_position()
+			var move_dir = (next - global_position)
+			move_dir.y = 0.0
+
+			_rotate_to_movement(move_dir)
+			return
+
+		# if close but LOS blocked → attempt short LOS
 		velocity = Vector3.ZERO
-		if can_shoot:
-			_shoot()
+		if _has_short_los_to_target(target, 2.5):
+			_rotate_to(target)
+			if can_shoot:
+				_shoot()
+		else:
+			# hold position facing movement direction (optional)
+			_rotate_to_movement(-pivot.global_transform.basis.z)
 		return
 
-	_move(target.global_position)
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR → ROTATE TO TARGET ░░░
+	# ────────────────────────────────────────────────
+	_rotate_to(target)
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR + TOO FAR → CLOSE DISTANCE ░░░
+	# ────────────────────────────────────────────────
+	if dist > shoot_range:
+		_move(target.global_position)
+		return
+
+	# ────────────────────────────────────────────────
+	# ░░░ LOS CLEAR + CLOSE → SHOOT ░░░
+	# ────────────────────────────────────────────────
+	velocity = Vector3.ZERO
+	if can_shoot:
+		_shoot()
 
 # ==============================
-# MOVEMENT (NAV + RAY + STUCK)
+# MOVEMENT (NAV + SEPARATION)
 # ==============================
 func _move(target_pos: Vector3):
 	agent.target_position = target_pos
@@ -105,77 +141,33 @@ func _move(target_pos: Vector3):
 	var move_dir = (next - global_position)
 	move_dir.y = 0.0
 
-	var forward = -pivot.global_transform.basis.z.normalized()
-	var right   =  pivot.global_transform.basis.x.normalized()
-	var left    = -right
-	var back    =  pivot.global_transform.basis.z.normalized()
-
 	if move_dir.length() > 0.01:
 		move_dir = move_dir.normalized()
 	else:
-		move_dir = forward
+		# no path info from navigation → fallback to direct chase direction
+		var chase_dir = (target_pos - global_position)
+		chase_dir.y = 0.0
+		if chase_dir.length() > 0.1:
+			move_dir = chase_dir.normalized()
+		else:
+			return
 
-	var front_blocked = ray_f_low.is_colliding() and not _is_step(ray_f_low)
-	var left_blocked  = ray_l_low.is_colliding() and not _is_step(ray_l_low)
-	var right_blocked = ray_r_low.is_colliding() and not _is_step(ray_r_low)
-	var back_blocked  = ray_b_low.is_colliding() and not _is_step(ray_b_low)
-
-	if is_stuck:
-		if not front_blocked or not left_blocked or not right_blocked or not back_blocked:
-			is_stuck = false
-			stuck_time = 0.0
-
-	if front_blocked and not left_blocked:
-		move_dir = (forward + left * 1.2).normalized()
-
-	elif front_blocked and not right_blocked:
-		move_dir = (forward + right * 1.2).normalized()
-
-	elif front_blocked and right_blocked and not left_blocked:
-		move_dir = left
-
-	elif front_blocked and left_blocked and not right_blocked:
-		move_dir = right
-
-	elif left_blocked and right_blocked and not front_blocked:
-		move_dir = forward
-
-	elif front_blocked:
-		move_dir = forward * 0.5
-
-	elif left_blocked and not right_blocked:
-		move_dir = (move_dir + right * 0.8).normalized()
-
-	elif right_blocked and not left_blocked:
-		move_dir = (move_dir + left * 0.8).normalized()
-
-	elif front_blocked and left_blocked and right_blocked and not back_blocked:
-		move_dir = back
-
+	# separation
 	move_dir += _apply_separation() * separation_strength
-
-	if move_dir.length() < 0.2:
-		stuck_time += get_physics_process_delta_time()
-	else:
-		stuck_time = 0.0
-		is_stuck = false
-
-	if stuck_time >= stuck_limit:
-		is_stuck = true
-		velocity.x = 0
-		velocity.z = 0
-		return
-
 	move_dir = move_dir.normalized()
+
 	velocity.x = move_dir.x * speed
 	velocity.z = move_dir.z * speed
 
-# ==============================
-# IGNORE "steps" COLLISION
-# ==============================
-func _is_step(ray: RayCast3D) -> bool:
-	var c = ray.get_collider()
-	return c and c.is_in_group("steps")
+
+
+
+	# separation
+	move_dir += _apply_separation() * separation_strength
+	move_dir = move_dir.normalized()
+
+	velocity.x = move_dir.x * speed
+	velocity.z = move_dir.z * speed
 
 # ==============================
 # TARGETING
@@ -216,20 +208,46 @@ func _rotate_to(body: Node3D):
 	var pos := body.global_position
 	pos.y = global_position.y
 	look_at(pos, Vector3.UP)
+	
+func _rotate_to_movement(move_dir: Vector3):
+	if move_dir.length() > 0.1:
+		var target_y = atan2(move_dir.x, move_dir.z)
+		rotation.y = lerp_angle(rotation.y, target_y, 0.07)
+
+
 
 # ==============================
-# SHOOTING
+# SHOOTING (DOWNED-AWARE AIM)
 # ==============================
 func _shoot():
 	can_shoot = false
 
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
-	bullet.direction = (target.global_position - p_muzzle.global_position).normalized()
+
+	var aim_point = _get_aim_point(target)
+	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
+
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
 	can_shoot = true
+
+
+# ==============================
+# AIM LOGIC
+# ==============================
+func _get_aim_point(t: Node3D) -> Vector3:
+	if not is_instance_valid(t):
+		return p_muzzle.global_position
+
+	var aim_pos = t.global_position
+
+	if "state" in t and t.state == t.PlayerState.DOWNED:
+		aim_pos.y -= 0.5
+
+	return aim_pos
+
 
 # ==============================
 # GRAVITY
@@ -284,3 +302,47 @@ func _set_color(mesh, color):
 			var nm = mat.duplicate()
 			nm.albedo_color = color
 			mesh.set_surface_override_material(i, nm)
+
+# ==============================
+# LOS
+# ==============================
+func has_los_to_target(t: Node3D) -> bool:
+	if not is_instance_valid(t):
+		return false
+
+	var from_pos = global_position + Vector3.UP * 1.2
+	var to_pos   = t.global_position + Vector3.UP * 1.2
+
+	var query := PhysicsRayQueryParameters3D.new()
+	query.from = from_pos
+	query.to = to_pos
+	query.exclude = [ self ]
+
+	var result = get_world_3d().direct_space_state.intersect_ray(query)
+
+	if result.is_empty():
+		return true
+
+	var hit = result.collider
+	return hit == t
+	
+func _has_short_los_to_target(t: Node3D, max_dist: float) -> bool:
+	if not is_instance_valid(t):
+		return false
+
+	var from_pos = p_muzzle.global_position
+	var to_pos = t.global_position + Vector3.UP * 1.2
+
+	if from_pos.distance_to(to_pos) > max_dist:
+		return false
+
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = from_pos
+	q.to = to_pos
+	q.exclude = [ self ]
+
+	var result = get_world_3d().direct_space_state.intersect_ray(q)
+	if result.is_empty():
+		return true
+
+	return result.collider == t
