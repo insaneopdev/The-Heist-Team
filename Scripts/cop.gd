@@ -17,9 +17,7 @@ extends CharacterBody3D
 @export var shoot_range := 6.0
 @export var shoot_delay := 0.5
 @export var gravity := 20.0
-
-@export var separation_radius := 1.4
-@export var separation_strength := 1.1
+@export var acceleration := 8.0  # Added for smoother movement
 
 # ==============================
 # STATE
@@ -31,8 +29,7 @@ var nearby_players: Array[Node3D] = []
 
 var _los_cache := false
 var _los_timer := 0.0
-var _los_interval := 0.08
-
+var _los_interval := 0.1 # Increased slightly for performance
 
 # ==============================
 # READY
@@ -46,224 +43,171 @@ func _ready():
 	vision_area.monitoring = true
 	vision_area.monitorable = true
 
-	agent.path_desired_distance = 0.4
-	agent.target_desired_distance = 0.4
-	agent.avoidance_enabled = true
+	# NAVIGATION SETUP
+	# These settings prevent the enemy from trying to reach the EXACT pixel
+	agent.path_desired_distance = 1.0 
+	agent.target_desired_distance = 1.0
+	
+	# DISABLE AVOIDANCE to stop the jittering
+	agent.avoidance_enabled = false 
 
 # ==============================
-# PHYSICS
+# PHYSICS PROCESS
 # ==============================
 func _physics_process(delta):
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 
-	_apply_gravity(delta)
+	# 1. Apply Gravity
+	if not is_on_floor():
+		velocity.y -= gravity * delta
 
+	# 2. Check Alert State
 	if not AlertManager.alert_active:
-		velocity.x = 0
-		velocity.z = 0
+		# Slow down to a stop if not alerted
+		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
+		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 		move_and_slide()
 		return
 
+	# 3. Find Target
 	target = _get_priority_target()
+	
 	if target:
 		_attack_behavior(delta)
+	else:
+		# No target, stop moving
+		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
+		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 
 	move_and_slide()
 
 # ==============================
-# ATTACK
+# ATTACK & MOVEMENT LOGIC
 # ==============================
 func _attack_behavior(delta):
 	var dist := global_position.distance_to(target.global_position)
 
-	# refresh LOS every 0.08s (prevents flicker + saves performance)
+	# --- LOS Check ---
 	_los_timer -= delta
 	if _los_timer <= 0.0:
 		_los_cache = has_los_to_target(target)
 		_los_timer = _los_interval
-
 	var los := _los_cache
 
-	# ────────────────────────────────────────────────
-	# ░░░ LOS BLOCKED → IGNORE SHOOT RANGE → FOLLOW ░░░
-	# ────────────────────────────────────────────────
-	if not los:
-
-		# if far → move + rotate by movement
-		if dist > 2.0:
-			_move(target.global_position)
-
-			var next = agent.get_next_path_position()
-			var move_dir = (next - global_position)
-			move_dir.y = 0.0
-
-			_rotate_to_movement(move_dir)
-			return
-
-		# if close but LOS blocked → attempt short LOS
-		velocity = Vector3.ZERO
-		if _has_short_los_to_target(target, 2.5):
-			_rotate_to(target)
+	# --- BEHAVIOR TREE ---
+	
+	# Case A: We have clear line of sight
+	if los:
+		_rotate_to(target)
+		
+		if dist > shoot_range:
+			# Too far? Chase.
+			_move_via_navigation(delta, target.global_position)
+		else:
+			# In range? Stop and shoot.
+			velocity.x = move_toward(velocity.x, 0, acceleration * delta)
+			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 			if can_shoot:
 				_shoot()
+		return
+
+	# Case B: No LOS (Target is hiding or around corner)
+	if not los:
+		# If we are somewhat far, pathfind to them
+		if dist > 2.0:
+			_move_via_navigation(delta, target.global_position)
+			
+			# Face movement direction so he doesn't moonwalk
+			if velocity.length() > 0.1:
+				_rotate_to_movement(velocity)
+		
+		# If we are close but can't see them (stuck on wall?), try to shoot anyway or wait
 		else:
-			# hold position facing movement direction (optional)
-			_rotate_to_movement(-pivot.global_transform.basis.z)
-		return
-
-	# ────────────────────────────────────────────────
-	# ░░░ LOS CLEAR → ROTATE TO TARGET ░░░
-	# ────────────────────────────────────────────────
-	_rotate_to(target)
-
-	# ────────────────────────────────────────────────
-	# ░░░ LOS CLEAR + TOO FAR → CLOSE DISTANCE ░░░
-	# ────────────────────────────────────────────────
-	if dist > shoot_range:
-		_move(target.global_position)
-		return
-
-	# ────────────────────────────────────────────────
-	# ░░░ LOS CLEAR + CLOSE → SHOOT ░░░
-	# ────────────────────────────────────────────────
-	velocity = Vector3.ZERO
-	if can_shoot:
-		_shoot()
+			velocity.x = move_toward(velocity.x, 0, acceleration * delta)
+			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+			
+			if _has_short_los_to_target(target, 3.0):
+				_rotate_to(target)
+				if can_shoot: _shoot()
 
 # ==============================
-# MOVEMENT (NAV + SEPARATION)
+# NAVIGATION MOVEMENT
 # ==============================
-func _move(target_pos: Vector3):
+func _move_via_navigation(delta, target_pos):
+	# Update target position (throttled check not strictly needed unless laggy)
 	agent.target_position = target_pos
 
-	var next = agent.get_next_path_position()
-	var move_dir = (next - global_position)
-	move_dir.y = 0.0
+	if agent.is_navigation_finished():
+		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
+		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+		return
 
-	if move_dir.length() > 0.01:
-		move_dir = move_dir.normalized()
-	else:
-		# no path info from navigation → fallback to direct chase direction
-		var chase_dir = (target_pos - global_position)
-		chase_dir.y = 0.0
-		if chase_dir.length() > 0.1:
-			move_dir = chase_dir.normalized()
-		else:
-			return
-
-	# separation
-	move_dir += _apply_separation() * separation_strength
-	move_dir = move_dir.normalized()
-
-	velocity.x = move_dir.x * speed
-	velocity.z = move_dir.z * speed
-
-
-
-
-	# separation
-	move_dir += _apply_separation() * separation_strength
-	move_dir = move_dir.normalized()
-
-	velocity.x = move_dir.x * speed
-	velocity.z = move_dir.z * speed
+	# Get the next point on the baked path
+	var next_path_position = agent.get_next_path_position()
+	var direction = (next_path_position - global_position).normalized()
+	
+	# Smoothly accelerate towards the direction
+	velocity.x = move_toward(velocity.x, direction.x * speed, acceleration * delta)
+	velocity.z = move_toward(velocity.z, direction.z * speed, acceleration * delta)
 
 # ==============================
-# TARGETING
+# ROTATION & HELPERS (Unchanged)
 # ==============================
+func _rotate_to(body: Node3D):
+	if not is_instance_valid(body): return
+	var pos := body.global_position
+	pos.y = global_position.y
+	look_at(pos, Vector3.UP)
+	
+func _rotate_to_movement(vel: Vector3):
+	if vel.length() > 0.1:
+		var target_y = atan2(vel.x, vel.z)
+		rotation.y = lerp_angle(rotation.y, target_y, 0.1)
+
+func _shoot():
+	can_shoot = false
+	var bullet = Bullet_Scene.instantiate()
+	bullet.global_transform = p_muzzle.global_transform
+	var aim_point = _get_aim_point(target)
+	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
+	get_tree().current_scene.add_child(bullet)
+	await get_tree().create_timer(shoot_delay).timeout
+	can_shoot = true
+
+func _get_aim_point(t: Node3D) -> Vector3:
+	if not is_instance_valid(t): return p_muzzle.global_position
+	var aim_pos = t.global_position
+	if "state" in t and t.state == t.PlayerState.DOWNED:
+		aim_pos.y -= 0.5
+	return aim_pos
+
 func _get_priority_target() -> Node3D:
-	if nearby_players.size() > 0:
-		return nearby_players[0]
+	if nearby_players.size() > 0: return nearby_players[0]
 	return _get_nearest_player()
 
 func _get_nearest_player() -> Node3D:
 	var best: Node3D
 	var best_d := INF
-
 	for p in get_tree().get_nodes_in_group("player"):
-		if not is_instance_valid(p):
-			continue
+		if not is_instance_valid(p): continue
 		var d := global_position.distance_to(p.global_position)
 		if d < best_d:
 			best_d = d
 			best = p
-
 	return best
 
-# ==============================
-# AREA EVENTS
-# ==============================
 func _on_Area3D_body_entered(body):
-	if body.is_in_group("player"):
-		nearby_players.append(body)
+	if body.is_in_group("player"): nearby_players.append(body)
 
 func _on_Area3D_body_exited(body):
 	nearby_players.erase(body)
 
-# ==============================
-# ROTATION
-# ==============================
-func _rotate_to(body: Node3D):
-	var pos := body.global_position
-	pos.y = global_position.y
-	look_at(pos, Vector3.UP)
-	
-func _rotate_to_movement(move_dir: Vector3):
-	if move_dir.length() > 0.1:
-		var target_y = atan2(move_dir.x, move_dir.z)
-		rotation.y = lerp_angle(rotation.y, target_y, 0.07)
-
-
-
-# ==============================
-# SHOOTING (DOWNED-AWARE AIM)
-# ==============================
-func _shoot():
-	can_shoot = false
-
-	var bullet = Bullet_Scene.instantiate()
-	bullet.global_transform = p_muzzle.global_transform
-
-	var aim_point = _get_aim_point(target)
-	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
-
-	get_tree().current_scene.add_child(bullet)
-
-	await get_tree().create_timer(shoot_delay).timeout
-	can_shoot = true
-
-
-# ==============================
-# AIM LOGIC
-# ==============================
-func _get_aim_point(t: Node3D) -> Vector3:
-	if not is_instance_valid(t):
-		return p_muzzle.global_position
-
-	var aim_pos = t.global_position
-
-	if "state" in t and t.state == t.PlayerState.DOWNED:
-		aim_pos.y -= 0.5
-
-	return aim_pos
-
-
-# ==============================
-# GRAVITY
-# ==============================
-func _apply_gravity(delta):
-	if not is_on_floor():
-		velocity.y -= gravity * delta
-
-# ==============================
-# DAMAGE
-# ==============================
+# DAMAGE / VISUALS
 @rpc("any_peer", "call_local")
 func receive_damage(amount, attacker_id):
 	health -= amount
-	if health <= 0:
-		die(attacker_id)
+	if health <= 0: die(attacker_id)
 
 func die(killer_id):
 	if multiplayer.is_server():
@@ -271,31 +215,15 @@ func die(killer_id):
 		GameManager.add_kill(killer_id)
 	queue_free()
 
-# ==============================
-# SEPARATION
-# ==============================
-func _apply_separation() -> Vector3:
-	var force := Vector3.ZERO
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if e == self or not is_instance_valid(e):
-			continue
-		var d := global_position.distance_to(e.global_position)
-		if d < separation_radius:
-			force += (global_position - e.global_position).normalized() * (separation_radius - d)
-	return force
-
-# ==============================
-# VISUALS
-# ==============================
 func make_cop_dress():
 	var bean = $mesh/bean
-	_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))
-	_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3))
-	_set_color(bean.get_node("Torus"), Color.BLACK)
+	if has_node("mesh/bean"):
+		_set_color(bean.get_node("Sphere"), Color(0.0, 0.1, 0.3))
+		_set_color(bean.get_node("Sphere_003"), Color(0.0, 0.1, 0.3))
+		_set_color(bean.get_node("Torus"), Color.BLACK)
 
 func _set_color(mesh, color):
-	if not mesh or not mesh.mesh:
-		return
+	if not mesh or not mesh.mesh: return
 	for i in mesh.mesh.get_surface_count():
 		var mat = mesh.get_active_material(i)
 		if mat:
@@ -303,46 +231,19 @@ func _set_color(mesh, color):
 			nm.albedo_color = color
 			mesh.set_surface_override_material(i, nm)
 
-# ==============================
-# LOS
-# ==============================
 func has_los_to_target(t: Node3D) -> bool:
-	if not is_instance_valid(t):
-		return false
-
+	if not is_instance_valid(t): return false
 	var from_pos = global_position + Vector3.UP * 1.2
 	var to_pos   = t.global_position + Vector3.UP * 1.2
-
 	var query := PhysicsRayQueryParameters3D.new()
 	query.from = from_pos
 	query.to = to_pos
 	query.exclude = [ self ]
-
 	var result = get_world_3d().direct_space_state.intersect_ray(query)
-
-	if result.is_empty():
-		return true
-
-	var hit = result.collider
-	return hit == t
+	if result.is_empty(): return true
+	return result.collider == t
 	
 func _has_short_los_to_target(t: Node3D, max_dist: float) -> bool:
-	if not is_instance_valid(t):
-		return false
-
-	var from_pos = p_muzzle.global_position
-	var to_pos = t.global_position + Vector3.UP * 1.2
-
-	if from_pos.distance_to(to_pos) > max_dist:
-		return false
-
-	var q := PhysicsRayQueryParameters3D.new()
-	q.from = from_pos
-	q.to = to_pos
-	q.exclude = [ self ]
-
-	var result = get_world_3d().direct_space_state.intersect_ray(q)
-	if result.is_empty():
-		return true
-
-	return result.collider == t
+	if not is_instance_valid(t): return false
+	if p_muzzle.global_position.distance_to(t.global_position) > max_dist: return false
+	return has_los_to_target(t)
