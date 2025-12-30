@@ -198,7 +198,11 @@ func _get_nearest_player() -> Node3D:
 	return best
 
 func _on_Area3D_body_entered(body):
-	if body.is_in_group("player"): nearby_players.append(body)
+	if body.is_in_group("player"): 
+		nearby_players.append(body)
+	
+		if multiplayer.is_server():
+			AlertManager.raise_alert(body.global_position)
 
 func _on_Area3D_body_exited(body):
 	nearby_players.erase(body)
