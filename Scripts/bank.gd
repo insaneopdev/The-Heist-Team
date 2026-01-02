@@ -1,16 +1,24 @@
 extends Node3D
 
 @export var player_scene : PackedScene
+@export var watchman_scene : PackedScene
+@export var cop_scene : PackedScene 
+
+
 @onready var spawn_points := $SpawnPoints.get_children()
 @onready var anim = $NavigationRegion3D/bank/AnimationPlayer
 @onready var drill = $NavigationRegion3D/bank/drill
 @onready var particles = $NavigationRegion3D/bank/GPUParticles3D
 @onready var timer = $NavigationRegion3D/bank/drilltime
 @onready var label = $Area3D/Label3D
+@onready var setup = $setup.get_children()
+
 
 var current_state = 0
 
 func _ready():
+	if multiplayer.is_server():
+		spawn_watchmen()
 	# Spawn self
 	spawn_player(multiplayer.get_unique_id())
 	
@@ -24,6 +32,7 @@ func _ready():
 	
 	drill.visible = false
 	particles.emitting = false
+	
 
 func _process(delta):
 	var money_needed = GameManager.min_loot_required - GameManager.total_loot
@@ -81,6 +90,21 @@ func plant():
 	if current_state == 0:
 		rpc("sync_start_drill")
 		
+
+func spawn_watchmen():
+	for marker in setup:
+		if not marker is Marker3D:
+			continue
+
+		var w = watchman_scene.instantiate()
+		w.global_transform = marker.global_transform
+
+		# Server owns AI
+		w.set_multiplayer_authority(1)
+
+		add_child(w)
+
+
 
 @rpc("any_peer", "call_local")
 func sync_start_drill():
