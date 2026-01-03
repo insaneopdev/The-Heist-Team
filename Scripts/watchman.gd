@@ -37,16 +37,15 @@ var _los_interval := 0.1
 func _ready():
 	GameManager.register_enemy()
 	add_to_group("enemy")
+
 	primary_gun.show()
-	make_cop_dress()
+	make_watchman_dress()
 
 	vision_area.monitoring = true
 	vision_area.monitorable = true
 
-
-
 	# NAVIGATION SETUP
-	agent.path_desired_distance = 1.0 
+	agent.path_desired_distance = 1.0
 	agent.target_desired_distance = 1.0
 	agent.avoidance_enabled = false
 
@@ -61,30 +60,23 @@ func _physics_process(delta):
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# Alert check
-	if not AlertManager.alert_active:
-		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
-		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
-		move_and_slide()
-		return
-
+	# 🔥 WATCHMAN LOGIC CHANGE
+	# Watchman reacts ONLY if it personally has a target
 	target = _get_priority_target()
 
 	if target and is_instance_valid(target):
 		_attack_behavior(delta)
 	else:
+		# Idle / calm behavior
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 
 	move_and_slide()
 
 # ==============================
-# ATTACK & MOVEMENT LOGIC
+# ATTACK & MOVEMENT
 # ==============================
 func _attack_behavior(delta):
-	if not is_instance_valid(target):
-		return
-
 	var dist := global_position.distance_to(target.global_position)
 
 	# LOS cache
@@ -92,9 +84,10 @@ func _attack_behavior(delta):
 	if _los_timer <= 0.0:
 		_los_cache = has_los_to_target(target)
 		_los_timer = _los_interval
+
 	var los := _los_cache
 
-	# CASE A: LOS TRUE
+	# CASE A: HAS LOS
 	if los:
 		_rotate_to(target)
 
@@ -107,7 +100,7 @@ func _attack_behavior(delta):
 				_shoot()
 		return
 
-	# CASE B: LOS FALSE
+	# CASE B: LOST LOS → MOVE TO LAST KNOWN
 	if dist > 2.0:
 		_move_via_navigation(delta, target.global_position)
 		if velocity.length() > 0.1:
@@ -116,13 +109,8 @@ func _attack_behavior(delta):
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 
-		if _has_short_los_to_target(target, 3.0):
-			_rotate_to(target)
-			if can_shoot:
-				_shoot()
-
 # ==============================
-# NAVIGATION MOVEMENT
+# NAVIGATION
 # ==============================
 func _move_via_navigation(delta, target_pos):
 	agent.target_position = target_pos
@@ -134,17 +122,16 @@ func _move_via_navigation(delta, target_pos):
 
 	var next_pos = agent.get_next_path_position()
 	var dir = next_pos - global_position
-	dir.y = 0 # 🔧 FIX: stair / slope bug
+	dir.y = 0
 	dir = dir.normalized()
 
 	velocity.x = move_toward(velocity.x, dir.x * speed, acceleration * delta)
 	velocity.z = move_toward(velocity.z, dir.z * speed, acceleration * delta)
 
 # ==============================
-# ROTATION & HELPERS
+# ROTATION
 # ==============================
 func _rotate_to(body: Node3D):
-	if not is_instance_valid(body): return
 	var pos := body.global_position
 	pos.y = global_position.y
 	look_at(pos, Vector3.UP)
@@ -154,68 +141,54 @@ func _rotate_to_movement(vel: Vector3):
 		var target_y = atan2(vel.x, vel.z)
 		rotation.y = lerp_angle(rotation.y, target_y, 0.1)
 
+# ==============================
+# SHOOTING
+# ==============================
 func _shoot():
-	if not is_instance_valid(target): return
-
 	can_shoot = false
+
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
-
-	var aim_point = _get_aim_point(target)
-	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
+	bullet.direction = (_get_aim_point(target) - p_muzzle.global_position).normalized()
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
 
-	# 🔧 FIX: target may be dead
-	if not is_instance_valid(self):
-		return
-	can_shoot = true
+	if is_instance_valid(self):
+		can_shoot = true
 
 func _get_aim_point(t: Node3D) -> Vector3:
-	if not is_instance_valid(t):
-		return p_muzzle.global_position
-	var aim_pos = t.global_position
+	var aim = t.global_position
 	if "state" in t and t.state == t.PlayerState.DOWNED:
-		aim_pos.y -= 0.5
-	return aim_pos
-
-func _get_priority_target() -> Node3D:
-	# 🔧 FIX: clean invalid entries
-	nearby_players = nearby_players.filter(is_instance_valid)
-
-	if nearby_players.size() > 0:
-		return nearby_players[0]
-
-	return _get_nearest_player()
-
-func _get_nearest_player() -> Node3D:
-	var best: Node3D
-	var best_d := INF
-	for p in get_tree().get_nodes_in_group("player"):
-		if not is_instance_valid(p): continue
-		var d := global_position.distance_to(p.global_position)
-		if d < best_d:
-			best_d = d
-			best = p
-	return best
+		aim.y -= 0.5
+	return aim
 
 # ==============================
-# VISION AREA CALLBACKS
+# TARGETING
+# ==============================
+func _get_priority_target() -> Node3D:
+	nearby_players = nearby_players.filter(is_instance_valid)
+	if nearby_players.size() > 0:
+		return nearby_players[0]
+	return null
+
+# ==============================
+# VISION CALLBACKS
 # ==============================
 func _on_Area3D_body_entered(body):
 	if body.is_in_group("player"):
 		if not nearby_players.has(body):
 			nearby_players.append(body)
 
-		if multiplayer.is_server() and not AlertManager.alert_active:
+		# 🔥 Watchman raises alert, but does NOT obey it
+		if multiplayer.is_server():
 			AlertManager.raise_alert(body.global_position)
 
 func _on_Area3D_body_exited(body):
 	nearby_players.erase(body)
 
 # ==============================
-# DAMAGE / VISUALS
+# DAMAGE
 # ==============================
 @rpc("any_peer", "call_local")
 func receive_damage(amount, attacker_id):
@@ -229,7 +202,10 @@ func die(killer_id):
 		GameManager.add_kill(killer_id)
 	queue_free()
 
-func make_cop_dress():
+# ==============================
+# VISUALS
+# ==============================
+func make_watchman_dress():
 	if not has_node("mesh/bean"): return
 	var bean = $mesh/bean
 	_set_color(bean.get_node("Sphere"), Color(0.4, 0.6, 1.0))
@@ -249,21 +225,14 @@ func _set_color(mesh, color):
 # LOS
 # ==============================
 func has_los_to_target(t: Node3D) -> bool:
-	if not is_instance_valid(t): return false
 	var from_pos = global_position + Vector3.UP * 1.2
 	var to_pos   = t.global_position + Vector3.UP * 1.2
 
-	var query := PhysicsRayQueryParameters3D.new()
-	query.from = from_pos
-	query.to = to_pos
-	query.exclude = [self]
-	query.collision_mask = 1 # 🔧 FIX: world-only ray
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = from_pos
+	q.to = to_pos
+	q.exclude = [self]
+	q.collision_mask = 1
 
-	var result = get_world_3d().direct_space_state.intersect_ray(query)
-	return result.is_empty() or result.collider == t
-
-func _has_short_los_to_target(t: Node3D, max_dist: float) -> bool:
-	if not is_instance_valid(t): return false
-	if global_position.distance_to(t.global_position) > max_dist:
-		return false
-	return has_los_to_target(t)
+	var res = get_world_3d().direct_space_state.intersect_ray(q)
+	return res.is_empty() or res.collider == t

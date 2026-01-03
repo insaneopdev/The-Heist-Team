@@ -11,8 +11,8 @@ extends Node3D
 # SCENE REFERENCES
 # ==============================
 @onready var spawn_points := $SpawnPoints.get_children()
-@onready var setup := $setup.get_children()               # initial watchmen
-@onready var enemy_spawn := $enemy_spawn.get_children()   # combat spawns
+@onready var setup_points := $setup.get_children()
+@onready var enemy_spawn := $enemy_spawn.get_children()
 
 @onready var anim = $NavigationRegion3D/bank/AnimationPlayer
 @onready var drill = $NavigationRegion3D/bank/drill
@@ -21,40 +21,34 @@ extends Node3D
 @onready var label = $Area3D/Label3D
 
 # ==============================
-# BANK STATE
+# BANK PHASES
 # ==============================
-# 0 = closed
-# 1 = drilling
-# 2 = open (optional future)
+# 0 = SETUP
+# 1 = ALERTED
+# 2 = DRILLING
+# 3 = LOOTING
 var current_state := 0
 
 # ==============================
-# SPAWN DIRECTOR SETTINGS
+# CONTROL FLAGS
 # ==============================
-@export var max_enemies_alive := 12
-@export var spawn_interval := 4.0
-@export var ramp_after_seconds := 60.0
-
-@export var cop_weight := 0.75
-@export var watchman_weight := 0.25
-
-var chaos_active := false
-var spawn_timer := 0.0
-var combat_time := 0.0
+var enemies_spawned := false
+var _players_spawned := false
 
 # ==============================
 # READY
 # ==============================
 func _ready():
+	randomize()
+
 	if multiplayer.is_server():
 		_spawn_initial_watchmen()
 
-	# Player spawning
-	spawn_player(multiplayer.get_unique_id())
-	for id in multiplayer.get_peers():
-		spawn_player(id)
+	if not _players_spawned:
+		_players_spawned = true
+		_spawn_existing_players()
 
-	multiplayer.peer_connected.connect(spawn_player)
+	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(remove_player)
 
 	drill.visible = false
@@ -63,14 +57,14 @@ func _ready():
 # ==============================
 # PROCESS
 # ==============================
-func _process(delta):
-	if multiplayer.is_server() and chaos_active:
-		_update_spawn_director(delta)
+func _process(_delta):
+	if multiplayer.is_server() and current_state == 0:
+		_check_setup_watchmen_dead()
 
 	_update_ui()
 
 # ==============================
-# UI LOGIC
+# UI
 # ==============================
 func _update_ui():
 	var money_needed = GameManager.min_loot_required - GameManager.total_loot
@@ -89,10 +83,21 @@ func _update_ui():
 # ==============================
 # PLAYER SPAWNING
 # ==============================
+func _spawn_existing_players():
+	spawn_player(multiplayer.get_unique_id())
+	for id in multiplayer.get_peers():
+		spawn_player(id)
+
+func _on_peer_connected(id):
+	spawn_player(id)
+
 func spawn_player(id):
+	if has_node(str(id)):
+		return
+
 	var p = player_scene.instantiate()
 	p.name = str(id)
-	p.position = _get_player_spawn()
+	p.global_position = _get_player_spawn()
 	add_child(p)
 
 func remove_player(id):
@@ -102,23 +107,97 @@ func remove_player(id):
 func _get_player_spawn() -> Vector3:
 	if spawn_points.is_empty():
 		return Vector3.ZERO
-	return spawn_points.pick_random().global_position
+	return spawn_points.pick_random().global_transform.origin
 
 # ==============================
-# BANK INTERACTION
+# SETUP WATCHMEN
+# ==============================
+func _spawn_initial_watchmen():
+	for marker in setup_points:
+		if not marker is Marker3D:
+			continue
+
+		var w = watchman_scene.instantiate()
+		w.global_transform = marker.global_transform
+		w.set_multiplayer_authority(multiplayer.get_unique_id())
+		add_child(w)
+		w.add_to_group("setup_watchman")
+
+func _check_setup_watchmen_dead():
+	if get_tree().get_nodes_in_group("setup_watchman").is_empty():
+		_enter_alerted_state()
+
+# ==============================
+# ALERTED STATE
+# ==============================
+func _enter_alerted_state():
+	if current_state >= 1:
+		return
+
+	current_state = 1
+
+	if multiplayer.is_server():
+		_spawn_enemy_set()
+		AlertManager.raise_alert(global_transform.origin)
+
+# ==============================
+# ENEMY SET SPAWNING (FINITE)
+# ==============================
+func _get_enemy_set_count() -> int:
+	var players := get_tree().get_nodes_in_group("player").size()
+
+	if players <= 2:
+		return 6
+	elif players <= 4:
+		return 10
+	else:
+		return 14
+
+func _get_spawn_offset(radius := 5.0) -> Vector3:
+	return Vector3(
+		randf_range(-radius, radius),
+		0.0,
+		randf_range(-radius, radius)
+	)
+
+func _spawn_enemy_set():
+	if enemies_spawned:
+		return
+
+	enemies_spawned = true
+	var total := _get_enemy_set_count()
+	var spawned := 0
+
+	while spawned < total:
+		for marker in enemy_spawn:
+			if spawned >= total:
+				break
+			if not marker is Marker3D:
+				continue
+
+			var cop = cop_scene.instantiate()
+
+			# 🔥 OFFSET FIX (5 units)
+			cop.global_position = marker.global_position + _get_spawn_offset(5.0)
+
+			cop.set_multiplayer_authority(multiplayer.get_unique_id())
+			add_child(cop)
+
+			spawned += 1
+
+# ==============================
+# BANK DRILL
 # ==============================
 func plant():
-	if current_state == 0:
+	if current_state == 1:
 		rpc("sync_start_drill")
 
 @rpc("any_peer", "call_local")
 func sync_start_drill():
-	if current_state != 0:
+	if current_state != 1:
 		return
 
-	current_state = 1
-	chaos_active = true
-
+	current_state = 2
 	drill.visible = true
 	particles.emitting = true
 	timer.start()
@@ -127,80 +206,10 @@ func _on_drilltime_timeout():
 	drill.queue_free()
 	particles.queue_free()
 	anim.play("VaultOpen")
+	current_state = 3
 
 # ==============================
-# INITIAL WATCHMEN
-# ==============================
-func _spawn_initial_watchmen():
-	for marker in setup:
-		if not marker is Marker3D:
-			continue
-
-		var w = watchman_scene.instantiate()
-		w.global_transform = marker.global_transform
-		w.set_multiplayer_authority(1)
-		add_child(w)
-
-# ==============================
-# SPAWN DIRECTOR (CORE SYSTEM)
-# ==============================
-func _update_spawn_director(delta):
-	combat_time += delta
-	spawn_timer -= delta
-
-	var interval := spawn_interval
-	if combat_time > ramp_after_seconds:
-		interval *= 0.6   # faster spawns later
-
-	if spawn_timer > 0:
-		return
-
-	if GameManager.get_remaining_enemies_count() >= max_enemies_alive:
-		return
-
-	spawn_timer = interval
-	_spawn_enemy()
-
-# ==============================
-# ENEMY SPAWNING
-# ==============================
-func _spawn_enemy():
-	if enemy_spawn.is_empty():
-		return
-
-	var marker: Marker3D = enemy_spawn.pick_random()
-	if not _is_spawn_safe(marker.global_position):
-		return
-
-	var roll := randf()
-	if roll < cop_weight:
-		_spawn_cop(marker)
-	else:
-		_spawn_watchman(marker)
-
-func _spawn_cop(marker: Marker3D):
-	var cop = cop_scene.instantiate()
-	cop.global_transform = marker.global_transform
-	cop.set_multiplayer_authority(1)
-	add_child(cop)
-
-func _spawn_watchman(marker: Marker3D):
-	var w = watchman_scene.instantiate()
-	w.global_transform = marker.global_transform
-	w.set_multiplayer_authority(1)
-	add_child(w)
-
-# ==============================
-# ANTI-CAMPING SPAWN SAFETY
-# ==============================
-func _is_spawn_safe(pos: Vector3) -> bool:
-	for p in get_tree().get_nodes_in_group("player"):
-		if pos.distance_to(p.global_position) < 6.0:
-			return false
-	return true
-
-# ==============================
-# EXTRACTION CHECK
+# EXTRACTION
 # ==============================
 func _on_area_3d_body_entered(body):
 	if not multiplayer.is_server():
