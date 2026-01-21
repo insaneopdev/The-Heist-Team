@@ -1,6 +1,11 @@
 extends CharacterBody3D
 
 # ==============================
+# SIGNALS
+# ==============================
+signal died(killer_id)
+
+# ==============================
 # NODE REFERENCES
 # ==============================
 @onready var pivot        = $pivot
@@ -15,9 +20,15 @@ extends CharacterBody3D
 @export var Bullet_Scene: PackedScene
 @export var speed := 6.0
 @export var shoot_range := 6.0
-@export var shoot_delay := 0.5
+@export var shoot_delay := 0.25
 @export var gravity := 20.0
 @export var acceleration := 8.0
+
+# ==============================
+# WATCHMAN BEHAVIOR
+# ==============================
+@export var leash_distance := 10.0
+@export var alert_ping_interval := 1.5
 
 # ==============================
 # STATE
@@ -27,16 +38,19 @@ var can_shoot := true
 var health := 100
 var nearby_players: Array[Node3D] = []
 
+var spawn_position: Vector3
+var alert_timer := 0.0
+
+# LOS
 var _los_cache := false
 var _los_timer := 0.0
-var _los_interval := 0.1
+var _los_interval := 0.03
 
 # ==============================
 # READY
 # ==============================
 func _ready():
-	GameManager.register_enemy()
-	add_to_group("enemy")
+	add_to_group("enemy") # AI coordination only
 
 	primary_gun.show()
 	make_watchman_dress()
@@ -44,10 +58,11 @@ func _ready():
 	vision_area.monitoring = true
 	vision_area.monitorable = true
 
-	# NAVIGATION SETUP
 	agent.path_desired_distance = 1.0
 	agent.target_desired_distance = 1.0
 	agent.avoidance_enabled = false
+
+	spawn_position = global_position
 
 # ==============================
 # PHYSICS PROCESS
@@ -56,41 +71,53 @@ func _physics_process(delta):
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 
-	# Gravity
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 
-	# 🔥 WATCHMAN LOGIC CHANGE
-	# Watchman reacts ONLY if it personally has a target
+	# TERRITORY LEASH
+	if global_position.distance_to(spawn_position) > leash_distance:
+		_move_via_navigation(delta, spawn_position)
+		_rotate_to_movement(velocity)
+		move_and_slide()
+		return
+
 	target = _get_priority_target()
 
 	if target and is_instance_valid(target):
 		_attack_behavior(delta)
 	else:
-		# Idle / calm behavior
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+
+	# ALERT PRESSURE
+	if target and multiplayer.is_server():
+		alert_timer -= delta
+		if alert_timer <= 0.0:
+			AlertManager.raise_alert(target.global_position)
+			alert_timer = alert_ping_interval
 
 	move_and_slide()
 
 # ==============================
-# ATTACK & MOVEMENT
+# ATTACK
 # ==============================
 func _attack_behavior(delta):
 	var dist := global_position.distance_to(target.global_position)
 
-	# LOS cache
+	# EXECUTE DOWNED PLAYER
+	if "state" in target and target.state == target.PlayerState.DOWNED:
+		_rotate_to(target)
+		if can_shoot:
+			_shoot()
+		return
+
 	_los_timer -= delta
 	if _los_timer <= 0.0:
 		_los_cache = has_los_to_target(target)
 		_los_timer = _los_interval
 
-	var los := _los_cache
-
-	# CASE A: HAS LOS
-	if los:
+	if _los_cache:
 		_rotate_to(target)
-
 		if dist > shoot_range:
 			_move_via_navigation(delta, target.global_position)
 		else:
@@ -98,16 +125,10 @@ func _attack_behavior(delta):
 			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 			if can_shoot:
 				_shoot()
-		return
-
-	# CASE B: LOST LOS → MOVE TO LAST KNOWN
-	if dist > 2.0:
-		_move_via_navigation(delta, target.global_position)
-		if velocity.length() > 0.1:
-			_rotate_to_movement(velocity)
 	else:
-		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
-		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+		if dist > 2.0:
+			_move_via_navigation(delta, target.global_position)
+			_rotate_to_movement(velocity)
 
 # ==============================
 # NAVIGATION
@@ -138,8 +159,7 @@ func _rotate_to(body: Node3D):
 
 func _rotate_to_movement(vel: Vector3):
 	if vel.length() > 0.1:
-		var target_y = atan2(vel.x, vel.z)
-		rotation.y = lerp_angle(rotation.y, target_y, 0.1)
+		rotation.y = lerp_angle(rotation.y, atan2(vel.x, vel.z), 0.15)
 
 # ==============================
 # SHOOTING
@@ -153,14 +173,20 @@ func _shoot():
 	get_tree().current_scene.add_child(bullet)
 
 	await get_tree().create_timer(shoot_delay).timeout
-
 	if is_instance_valid(self):
 		can_shoot = true
 
 func _get_aim_point(t: Node3D) -> Vector3:
-	var aim = t.global_position
+	var aim := t.global_position
+	aim += Vector3(
+		randf_range(-0.15, 0.15),
+		randf_range(-0.1, 0.1),
+		randf_range(-0.15, 0.15)
+	)
+
 	if "state" in t and t.state == t.PlayerState.DOWNED:
-		aim.y -= 0.5
+		aim.y -= 0.6
+
 	return aim
 
 # ==============================
@@ -180,7 +206,6 @@ func _on_Area3D_body_entered(body):
 		if not nearby_players.has(body):
 			nearby_players.append(body)
 
-		# 🔥 Watchman raises alert, but does NOT obey it
 		if multiplayer.is_server():
 			AlertManager.raise_alert(body.global_position)
 
@@ -188,7 +213,7 @@ func _on_Area3D_body_exited(body):
 	nearby_players.erase(body)
 
 # ==============================
-# DAMAGE
+# DAMAGE / DEATH
 # ==============================
 @rpc("any_peer", "call_local")
 func receive_damage(amount, attacker_id):
@@ -198,22 +223,23 @@ func receive_damage(amount, attacker_id):
 
 func die(killer_id):
 	if multiplayer.is_server():
-		GameManager.enemy_died()
-		GameManager.add_kill(killer_id)
+		emit_signal("died", killer_id)
 	queue_free()
 
 # ==============================
 # VISUALS
 # ==============================
 func make_watchman_dress():
-	if not has_node("mesh/bean"): return
+	if not has_node("mesh/bean"):
+		return
 	var bean = $mesh/bean
 	_set_color(bean.get_node("Sphere"), Color(0.4, 0.6, 1.0))
 	_set_color(bean.get_node("Sphere_003"), Color(0.05, 0.05, 0.1))
 	_set_color(bean.get_node("Torus"), Color.BLACK)
 
 func _set_color(mesh, color):
-	if not mesh or not mesh.mesh: return
+	if not mesh or not mesh.mesh:
+		return
 	for i in mesh.mesh.get_surface_count():
 		var mat = mesh.get_active_material(i)
 		if mat:
@@ -232,7 +258,6 @@ func has_los_to_target(t: Node3D) -> bool:
 	q.from = from_pos
 	q.to = to_pos
 	q.exclude = [self]
-	q.collision_mask = 1
 
 	var res = get_world_3d().direct_space_state.intersect_ray(q)
 	return res.is_empty() or res.collider == t
