@@ -14,6 +14,7 @@ extends Node3D
 @onready var setup_points := $setup.get_children()
 @onready var enemy_spawn := $enemy_spawn.get_children()
 
+@onready var spawn_timer := $EnemySpawnTimer
 @onready var anim = $NavigationRegion3D/bank/AnimationPlayer
 @onready var drill = $NavigationRegion3D/bank/drill
 @onready var particles = $NavigationRegion3D/bank/GPUParticles3D
@@ -23,16 +24,17 @@ extends Node3D
 # ==============================
 # BANK PHASES
 # ==============================
-# 0 = SETUP
-# 1 = ALERTED
-# 2 = DRILLING
-# 3 = LOOTING
+# 0 = SETUP | 1 = ALERTED | 2 = DRILLING | 3 = LOOTING
 var current_state := 0
 
 # ==============================
-# CONTROL FLAGS
+# ENEMY CONTROL (SINGLE AUTHORITY)
 # ==============================
-var enemies_spawned := false
+var max_enemies := 0
+var spawned_count := 0
+var alive_count := 0
+var spawn_active := false
+
 var _players_spawned := false
 
 # ==============================
@@ -43,6 +45,7 @@ func _ready():
 
 	if multiplayer.is_server():
 		_spawn_initial_watchmen()
+		spawn_timer.timeout.connect(_try_spawn)
 
 	if not _players_spawned:
 		_players_spawned = true
@@ -51,6 +54,7 @@ func _ready():
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(remove_player)
 
+	spawn_timer.stop()
 	drill.visible = false
 	particles.emitting = false
 
@@ -107,21 +111,19 @@ func remove_player(id):
 func _get_player_spawn() -> Vector3:
 	if spawn_points.is_empty():
 		return Vector3.ZERO
-	return spawn_points.pick_random().global_transform.origin
+	return spawn_points.pick_random().global_position
 
 # ==============================
 # SETUP WATCHMEN
 # ==============================
 func _spawn_initial_watchmen():
 	for marker in setup_points:
-		if not marker is Marker3D:
-			continue
-
-		var w = watchman_scene.instantiate()
-		w.global_transform = marker.global_transform
-		w.set_multiplayer_authority(multiplayer.get_unique_id())
-		add_child(w)
-		w.add_to_group("setup_watchman")
+		if marker is Marker3D:
+			var w = watchman_scene.instantiate()
+			w.global_transform = marker.global_transform
+			w.set_multiplayer_authority(multiplayer.get_unique_id())
+			add_child(w)
+			w.add_to_group("setup_watchman")
 
 func _check_setup_watchmen_dead():
 	if get_tree().get_nodes_in_group("setup_watchman").is_empty():
@@ -137,53 +139,77 @@ func _enter_alerted_state():
 	current_state = 1
 
 	if multiplayer.is_server():
-		_spawn_enemy_set()
+		_start_enemy_encounter()
 		AlertManager.raise_alert(global_transform.origin)
 
 # ==============================
-# ENEMY SET SPAWNING (FINITE)
+# ENEMY SPAWNING (FINITE & SAFE)
 # ==============================
 func _get_enemy_set_count() -> int:
 	var players := get_tree().get_nodes_in_group("player").size()
-
 	if players <= 2:
 		return 6
 	elif players <= 4:
 		return 10
-	else:
-		return 14
+	return 14
+
+func _start_enemy_encounter():
+	max_enemies = _get_enemy_set_count()
+	spawned_count = 0
+	alive_count = 0
+	spawn_active = true
+	spawn_timer.start(1.5)
+
+func _try_spawn():
+	if not spawn_active:
+		return
+
+	if spawned_count >= max_enemies:
+		spawn_active = false
+		spawn_timer.stop()
+		return
+
+	if alive_count >= 3:
+		return
+
+	_spawn_enemy()
+
+func _spawn_enemy():
+	if enemy_spawn.is_empty():
+		return
+
+	var marker = enemy_spawn.pick_random()
+	if not marker is Marker3D:
+		return
+
+	var cop = cop_scene.instantiate()
+	cop.global_position = marker.global_position + _get_spawn_offset(5.0)
+	cop.set_multiplayer_authority(multiplayer.get_unique_id())
+	add_child(cop)
+
+	spawned_count += 1
+	alive_count += 1
+
+	# 🔒 SINGLE SOURCE OF TRUTH
+	GameManager.register_enemy()
+
+	# Enemy MUST emit: died(killer_id)
+	cop.died.connect(_on_enemy_died)
+
+func _on_enemy_died(killer_id):
+	alive_count = max(alive_count - 1, 0)
+	GameManager.enemy_died()
+	GameManager.add_kill(killer_id)
+
+	if spawned_count == max_enemies and alive_count == 0:
+		print("BANK ENCOUNTER CLEARED")
 
 func _get_spawn_offset(radius := 5.0) -> Vector3:
 	return Vector3(
 		randf_range(-radius, radius),
-		0.0,
+		0,
 		randf_range(-radius, radius)
 	)
-
-func _spawn_enemy_set():
-	if enemies_spawned:
-		return
-
-	enemies_spawned = true
-	var total := _get_enemy_set_count()
-	var spawned := 0
-
-	while spawned < total:
-		for marker in enemy_spawn:
-			if spawned >= total:
-				break
-			if not marker is Marker3D:
-				continue
-
-			var cop = cop_scene.instantiate()
-
-			# 🔥 OFFSET FIX (5 units)
-			cop.global_position = marker.global_position + _get_spawn_offset(5.0)
-
-			cop.set_multiplayer_authority(multiplayer.get_unique_id())
-			add_child(cop)
-
-			spawned += 1
 
 # ==============================
 # BANK DRILL

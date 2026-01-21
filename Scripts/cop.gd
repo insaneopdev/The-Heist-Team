@@ -1,6 +1,11 @@
 extends CharacterBody3D
 
 # ==============================
+# SIGNALS
+# ==============================
+signal died(killer_id)
+
+# ==============================
 # NODE REFERENCES
 # ==============================
 @onready var pivot        = $pivot
@@ -27,17 +32,16 @@ var can_shoot := true
 var health := 100
 var nearby_players: Array[Node3D] = []
 
-# LOS
+# LOS CACHE
 var _los_cache := false
 var _los_timer := 0.0
 var _los_interval := 0.1
 
-# --- Downed Control ---
+# --- DOWNED CONTROL ---
 var controlling_downed := false
 var downed_target: Node3D = null
 var downed_wait_timer := 0.0
 var downed_wait_time := 2.0
-
 var decision_made := false
 var choose_kill_downed := false
 var choose_chase_rescuer := false
@@ -46,8 +50,7 @@ var choose_chase_rescuer := false
 # READY
 # ==============================
 func _ready():
-	GameManager.register_enemy()
-	add_to_group("enemy")
+	add_to_group("enemy") # AI ONLY (never used for game logic)
 
 	primary_gun.show()
 	make_cop_dress()
@@ -74,7 +77,6 @@ func _physics_process(delta):
 		move_and_slide()
 		return
 
-	# DOWNED PRIORITY
 	if _check_for_downed_player(delta):
 		move_and_slide()
 		return
@@ -172,7 +174,7 @@ func _reset_downed_control():
 	decision_made = false
 
 # ==============================
-# COMBAT LOGIC
+# COMBAT
 # ==============================
 func _attack_behavior(delta):
 	var dist := global_position.distance_to(target.global_position)
@@ -181,15 +183,15 @@ func _attack_behavior(delta):
 	if _los_timer <= 0:
 		_los_cache = has_los_to_target(target)
 		_los_timer = _los_interval
-	var los := _los_cache
 
-	if los:
+	if _los_cache:
 		_rotate_to(target)
 		if dist > shoot_range:
 			_move_via_navigation(delta, target.global_position)
 		else:
 			_stop_motion(delta)
-			if can_shoot: _shoot()
+			if can_shoot:
+				_shoot()
 		return
 
 	if dist > 2.0:
@@ -199,7 +201,7 @@ func _attack_behavior(delta):
 		_stop_motion(delta)
 
 # ==============================
-# HELPERS
+# MOVEMENT HELPERS
 # ==============================
 func _move_via_navigation(delta, pos):
 	agent.target_position = pos
@@ -226,16 +228,21 @@ func _rotate_to_movement(v):
 	if v.length() > 0.1:
 		rotation.y = lerp_angle(rotation.y, atan2(v.x, v.z), 0.1)
 
+# ==============================
+# SHOOTING
+# ==============================
 func _shoot():
 	_shoot_target(target)
 
 func _shoot_target(t):
 	if not can_shoot or not is_instance_valid(t): return
 	can_shoot = false
+
 	var bullet = Bullet_Scene.instantiate()
 	bullet.global_transform = p_muzzle.global_transform
 	bullet.direction = (t.global_position - p_muzzle.global_position).normalized()
 	get_tree().current_scene.add_child(bullet)
+
 	await get_tree().create_timer(shoot_delay).timeout
 	can_shoot = true
 
@@ -243,7 +250,8 @@ func _shoot_target(t):
 # TARGETING
 # ==============================
 func _get_priority_target() -> Node3D:
-	if nearby_players.size() > 0: return nearby_players[0]
+	if nearby_players.size() > 0:
+		return nearby_players[0]
 	return _get_nearest_player()
 
 func _get_nearest_player() -> Node3D:
@@ -265,7 +273,7 @@ func _on_Area3D_body_exited(body):
 	nearby_players.erase(body)
 
 # ==============================
-# DAMAGE
+# DAMAGE / DEATH
 # ==============================
 @rpc("any_peer", "call_local")
 func receive_damage(amount, attacker_id):
@@ -275,8 +283,7 @@ func receive_damage(amount, attacker_id):
 
 func die(killer_id):
 	if multiplayer.is_server():
-		GameManager.enemy_died()
-		GameManager.add_kill(killer_id)
+		emit_signal("died", killer_id)
 	queue_free()
 
 # ==============================
@@ -299,7 +306,7 @@ func _set_color(mesh, color):
 			mesh.set_surface_override_material(i, nm)
 
 # ==============================
-# LOS
+# LINE OF SIGHT
 # ==============================
 func has_los_to_target(t) -> bool:
 	if not is_instance_valid(t): return false
