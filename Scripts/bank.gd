@@ -81,7 +81,7 @@ func _update_ui():
 		label.modulate = Color.GREEN
 
 # ==============================
-# PLAYER SPAWNING
+# PLAYER SPAWNING (FIXED)
 # ==============================
 func _spawn_existing_players():
 	spawn_player(multiplayer.get_unique_id())
@@ -89,7 +89,8 @@ func _spawn_existing_players():
 		spawn_player(id)
 
 func _on_peer_connected(id):
-	spawn_player(id)
+	if multiplayer.is_server():
+		spawn_player(id)
 
 func spawn_player(id):
 	if has_node(str(id)):
@@ -97,8 +98,10 @@ func spawn_player(id):
 
 	var p = player_scene.instantiate()
 	p.name = str(id)
-	p.global_position = _get_player_spawn()
 	add_child(p)
+
+	p.global_position = _get_player_spawn()
+	p.set_multiplayer_authority(id)
 
 func remove_player(id):
 	if has_node(str(id)):
@@ -107,20 +110,28 @@ func remove_player(id):
 func _get_player_spawn() -> Vector3:
 	if spawn_points.is_empty():
 		return Vector3.ZERO
-	return spawn_points.pick_random().global_transform.origin
+
+	var marker = spawn_points.pick_random()
+	if not marker.is_inside_tree():
+		return Vector3.ZERO
+
+	return marker.global_position
 
 # ==============================
-# SETUP WATCHMEN
+# SETUP WATCHMEN (FIXED)
 # ==============================
 func _spawn_initial_watchmen():
 	for marker in setup_points:
 		if not marker is Marker3D:
 			continue
+		if not marker.is_inside_tree():
+			continue
 
 		var w = watchman_scene.instantiate()
+		add_child(w)
+
 		w.global_transform = marker.global_transform
 		w.set_multiplayer_authority(multiplayer.get_unique_id())
-		add_child(w)
 		w.add_to_group("setup_watchman")
 
 func _check_setup_watchmen_dead():
@@ -141,7 +152,7 @@ func _enter_alerted_state():
 		AlertManager.raise_alert(global_transform.origin)
 
 # ==============================
-# ENEMY SET SPAWNING (FINITE)
+# ENEMY SET SPAWNING (FIXED)
 # ==============================
 func _get_enemy_set_count() -> int:
 	var players := get_tree().get_nodes_in_group("player").size()
@@ -174,14 +185,14 @@ func _spawn_enemy_set():
 				break
 			if not marker is Marker3D:
 				continue
+			if not marker.is_inside_tree():
+				continue
 
 			var cop = cop_scene.instantiate()
-
-			# 🔥 OFFSET FIX (5 units)
-			cop.global_position = marker.global_position + _get_spawn_offset(5.0)
-
-			cop.set_multiplayer_authority(multiplayer.get_unique_id())
 			add_child(cop)
+
+			cop.global_position = marker.global_position + _get_spawn_offset(5.0)
+			cop.set_multiplayer_authority(multiplayer.get_unique_id())
 
 			spawned += 1
 
@@ -189,10 +200,10 @@ func _spawn_enemy_set():
 # BANK DRILL
 # ==============================
 func plant():
-	if current_state == 1:
-		rpc("sync_start_drill")
+	if multiplayer.is_server() and current_state == 1:
+		sync_start_drill()
 
-@rpc("any_peer", "call_local")
+@rpc("authority", "call_local")
 func sync_start_drill():
 	if current_state != 1:
 		return
