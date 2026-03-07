@@ -10,16 +10,18 @@ extends CharacterBody3D
 @onready var agent        = $NavigationAgent3D
 
 # --- EXTRACTION SHOOTER VSX ---
+var strafe_dir := 1.0
+var strafe_timer := 0.0
 
 # ==============================
 # EXPORTS
 # ==============================
-@export var Bullet_Scene: PackedScene
 @export var speed := 6.0
 @export var shoot_range := 6.0
 @export var shoot_delay := 0.5
 @export var gravity := 20.0
 @export var acceleration := 8.0
+@export var damage := 10
 
 # ==============================
 # STATE
@@ -99,8 +101,7 @@ func _attack_behavior(delta):
 		if dist > shoot_range:
 			_move_via_navigation(delta, target.global_position)
 		else:
-			velocity.x = move_toward(velocity.x, 0, acceleration * delta)
-			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+			_combat_strafe(delta)
 			if can_shoot:
 				_shoot()
 		return
@@ -113,6 +114,16 @@ func _attack_behavior(delta):
 	else:
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+
+func _combat_strafe(delta):
+	strafe_timer -= delta
+	if strafe_timer <= 0:
+		strafe_dir *= -1
+		strafe_timer = randf_range(0.5, 1.5)
+	
+	var side_vec = global_transform.basis.x * strafe_dir * (speed * 0.7)
+	velocity.x = move_toward(velocity.x, side_vec.x, acceleration * delta)
+	velocity.z = move_toward(velocity.z, side_vec.z, acceleration * delta)
 
 # ==============================
 # NAVIGATION
@@ -152,24 +163,39 @@ func _rotate_to_movement(vel: Vector3):
 func _shoot():
 	can_shoot = false
 
-	var bullet = Bullet_Scene.instantiate()
-	bullet.global_transform = p_muzzle.global_transform # [FIXED] Set the starting position!
-	bullet.direction = (_get_aim_point(target) - p_muzzle.global_position).normalized()
-	get_tree().current_scene.add_child(bullet)
+	# Broadcast shoot visuals and trigger hitscan on the server
+	rpc("sync_shoot", _get_aim_point(target))
 
-	# Muzzle Flash
+	await get_tree().create_timer(shoot_delay).timeout
+
+	if is_instance_valid(self):
+		can_shoot = true
+
+@rpc("call_local", "authority")
+func sync_shoot(aim_target: Vector3):
+	# --- 1. VISUALS (Runs on all clients) ---
 	var f = OmniLight3D.new()
 	f.light_color = Color.YELLOW
 	f.omni_range = 2.5
 	p_muzzle.add_child(f)
 	
-	await get_tree().create_timer(0.05).timeout
-	f.queue_free()
+	# Temporary muzzle flash cleanup
+	get_tree().create_timer(0.05).timeout.connect(func():
+		if is_instance_valid(f): f.queue_free()
+	)
 
-	await get_tree().create_timer(shoot_delay - 0.05).timeout
-
-	if is_instance_valid(self):
-		can_shoot = true
+	# --- 2. HITSCAN LOGIC (Server Only) ---
+	if multiplayer.is_server():
+		var space_state = get_world_3d().direct_space_state
+		var query = PhysicsRayQueryParameters3D.create(p_muzzle.global_position, aim_target)
+		query.exclude = [self]
+		query.collision_mask = 1 # Assuming default mask hits players/world
+		
+		var result = space_state.intersect_ray(query)
+		if result and result.collider:
+			if result.collider.is_in_group("player") and result.collider.has_method("receive_damage"):
+				# Tell the player they took damage
+				result.collider.rpc("receive_damage", damage)
 
 func _get_aim_point(t: Node3D) -> Vector3:
 	var aim = t.global_position
