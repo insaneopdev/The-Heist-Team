@@ -9,6 +9,8 @@ extends CharacterBody3D
 @onready var vision_area  = $pivot/Area3D
 @onready var agent        = $NavigationAgent3D
 
+# --- EXTRACTION SHOOTER VSX ---
+
 # ==============================
 # EXPORTS
 # ==============================
@@ -70,6 +72,9 @@ func _physics_process(delta):
 		# Idle / calm behavior
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+
+	# 4. Crowd Avoidance
+	_apply_crowd_avoidance(delta)
 
 	move_and_slide()
 
@@ -148,11 +153,19 @@ func _shoot():
 	can_shoot = false
 
 	var bullet = Bullet_Scene.instantiate()
-	bullet.global_transform = p_muzzle.global_transform
 	bullet.direction = (_get_aim_point(target) - p_muzzle.global_position).normalized()
 	get_tree().current_scene.add_child(bullet)
 
-	await get_tree().create_timer(shoot_delay).timeout
+	# Muzzle Flash
+	var f = OmniLight3D.new()
+	f.light_color = Color.YELLOW
+	f.omni_range = 2.5
+	p_muzzle.add_child(f)
+	
+	await get_tree().create_timer(0.05).timeout
+	f.queue_free()
+
+	await get_tree().create_timer(shoot_delay - 0.05).timeout
 
 	if is_instance_valid(self):
 		can_shoot = true
@@ -236,3 +249,17 @@ func has_los_to_target(t: Node3D) -> bool:
 
 	var res = get_world_3d().direct_space_state.intersect_ray(q)
 	return res.is_empty() or res.collider == t
+
+func _apply_crowd_avoidance(delta):
+	for other in get_tree().get_nodes_in_group("enemy"):
+		if other == self: continue
+		var dist = global_position.distance_to(other.global_position)
+		if dist < 1.4:
+			var push_dir = other.global_position.direction_to(global_position)
+			push_dir.y = 0
+			if push_dir.length() < 0.01:
+				push_dir = Vector3(randf(), 0, randf()).normalized()
+			
+			var strength = (1.4 - dist) * 10.0
+			velocity.x += push_dir.x * strength * delta
+			velocity.z += push_dir.z * strength * delta

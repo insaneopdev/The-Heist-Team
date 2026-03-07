@@ -9,6 +9,10 @@ extends CharacterBody3D
 @onready var vision_area  = $pivot/Area3D
 @onready var agent        = $NavigationAgent3D
 
+# --- EXTRACTION SHOOTER VSX ---
+var strafe_dir := 1.0
+var strafe_timer := 0.0
+
 # ==============================
 # EXPORTS
 # ==============================
@@ -80,6 +84,9 @@ func _physics_process(delta):
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 
+	# 4. Crowd Avoidance (Fixes bottlenecks at doors)
+	_apply_crowd_avoidance(delta)
+	
 	move_and_slide()
 
 # ==============================
@@ -102,12 +109,11 @@ func _attack_behavior(delta):
 		_rotate_to(target)
 		
 		if dist > shoot_range:
-			# Too far? Chase.
+			# Chasing
 			_move_via_navigation(delta, target.global_position)
 		else:
-			# In range? Stop and shoot.
-			velocity.x = move_toward(velocity.x, 0, acceleration * delta)
-			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+			# Combat Strafe (Harder to hit)
+			_combat_strafe(delta)
 			if can_shoot:
 				_shoot()
 		return
@@ -130,6 +136,16 @@ func _attack_behavior(delta):
 			if _has_short_los_to_target(target, 3.0):
 				_rotate_to(target)
 				if can_shoot: _shoot()
+
+func _combat_strafe(delta):
+	strafe_timer -= delta
+	if strafe_timer <= 0:
+		strafe_dir *= -1
+		strafe_timer = randf_range(0.5, 1.5)
+	
+	var side_vec = global_transform.basis.x * strafe_dir * (speed * 0.7)
+	velocity.x = move_toward(velocity.x, side_vec.x, acceleration * delta)
+	velocity.z = move_toward(velocity.z, side_vec.z, acceleration * delta)
 
 # ==============================
 # NAVIGATION MOVEMENT
@@ -172,7 +188,17 @@ func _shoot():
 	var aim_point = _get_aim_point(target)
 	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
 	get_tree().current_scene.add_child(bullet)
-	await get_tree().create_timer(shoot_delay).timeout
+	
+	# Muzzle Flash
+	var f = OmniLight3D.new()
+	f.light_color = Color.ORANGE
+	f.omni_range = 3.0
+	p_muzzle.add_child(f)
+	
+	await get_tree().create_timer(0.05).timeout
+	f.queue_free()
+	
+	await get_tree().create_timer(shoot_delay - 0.05).timeout
 	can_shoot = true
 
 func _get_aim_point(t: Node3D) -> Vector3:
@@ -247,3 +273,18 @@ func _has_short_los_to_target(t: Node3D, max_dist: float) -> bool:
 	if not is_instance_valid(t): return false
 	if p_muzzle.global_position.distance_to(t.global_position) > max_dist: return false
 	return has_los_to_target(t)
+
+func _apply_crowd_avoidance(delta):
+	# Loop through enemies to push away if overlapping (prevents door sticking)
+	for other in get_tree().get_nodes_in_group("enemy"):
+		if other == self: continue
+		var dist = global_position.distance_to(other.global_position)
+		if dist < 1.5: # Detection radius
+			var push_dir = other.global_position.direction_to(global_position)
+			push_dir.y = 0
+			if push_dir.length() < 0.01:
+				push_dir = Vector3(randf(), 0, randf()).normalized()
+			
+			var push_strength = (1.5 - dist) * 12.0
+			velocity.x += push_dir.x * push_strength * delta
+			velocity.z += push_dir.z * push_strength * delta
