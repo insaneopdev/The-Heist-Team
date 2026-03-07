@@ -283,7 +283,7 @@ func _apply_crowd_avoidance(delta):
 			var push_dir = other.global_position.direction_to(global_position)
 			push_dir.y = 0
 			if push_dir.length() < 0.01:
-				push_dir = Vector3(randf(), 0, randf()).normalized()
+				push_dir = Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0)).normalized()
 			
 			var push_strength = (1.5 - dist) * 12.0
 			velocity.x += push_dir.x * push_strength * delta
