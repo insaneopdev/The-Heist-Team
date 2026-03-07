@@ -239,7 +239,17 @@ func die(killer_id):
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
+		rpc("_sync_death_juice")
+	
+	# Small delay before removal
+	await get_tree().create_timer(0.15).timeout
 	queue_free()
+
+@rpc("call_local", "authority")
+func _sync_death_juice():
+	# Death Pop
+	var tween = create_tween()
+	tween.tween_property(self, "scale", Vector3.ZERO, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 func make_cop_dress():
 	var bean = $mesh/bean

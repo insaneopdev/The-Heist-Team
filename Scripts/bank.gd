@@ -66,7 +66,15 @@ func _ready():
 # ==============================
 # PROCESS
 # ==============================
+# = = = = = = = = = = = = = = = = = = = =
+# JUICE & JUICE STATE
+# = = = = = = = = = = = = = = = = = = = =
+var _ui_timer := 0.0
+var _target_label_color : Color = Color.WHITE
+@onready var _original_label_pos : Vector3 = label.position
+
 func _process(delta):
+	_ui_timer += delta
 	if multiplayer.is_server():
 		match director.current_phase:
 			director.Phase.SETUP:
@@ -75,6 +83,32 @@ func _process(delta):
 				director.update_director(delta)
 
 	_update_ui()
+	_apply_ui_juice(delta)
+
+func _apply_ui_juice(delta):
+	# 1. Smooth Color Transition
+	label.modulate = label.modulate.lerp(_target_label_color, delta * 5.0)
+	
+	# 2. Pulsing Logic
+	var pulse_speed = 4.0
+	var pulse_amt = 0.05
+	
+	if director.current_phase == director.Phase.LOOTING:
+		pulse_speed = 8.0 # Faster pulse when escaping/looting
+		pulse_amt = 0.12
+	elif director.is_assault_wave:
+		pulse_speed = 6.0
+		pulse_amt = 0.08
+
+	var s = 1.0 + sin(_ui_timer * pulse_speed) * pulse_amt
+	label.scale = label.scale.lerp(Vector3.ONE * s, delta * 10.0)
+	
+	# 3. Floating "Hover" effect
+	label.position.y = _original_label_pos.y + sin(_ui_timer * 1.5) * 0.1
+	
+	# 4. Subtle rotation shake if high stress
+	if director.group_drama_level > 0.6:
+		label.rotation.z = sin(_ui_timer * 20.0) * 0.02
 
 # ==============================
 # PERFORMANCE: CACHING
@@ -103,17 +137,21 @@ func _update_ui():
 	var cap = director.get_max_enemy_cap()
 
 	if money_needed > 0:
-		label.text = "Need $" + str(money_needed) + " more"
-		label.modulate = Color.RED
+		label.text = "NEED $" + str(money_needed) + " MORE"
+		_target_label_color = Color.RED
 		return
 
 	match director.current_phase:
 		director.Phase.LOOTING:
-			label.text = "ESCAPE NOW!"
-			label.modulate = Color.GREEN
+			if enemies_left > 0:
+				label.text = "⚠ ELIMINATE ALL OF THEM ⚠"
+				_target_label_color = Color.ORANGE
+			else:
+				label.text = "✨ ESCAPE NOW! ✨"
+				_target_label_color = Color.GREEN
 		_:
 			var status = "HOLDING POSITION"
-			if director.current_phase == director.Phase.DRILLING: status = "DRILL IN PROGRESS"
+			if director.current_phase == director.Phase.DRILLING: status = "DRILLING: KEEP COPS OUT"
 			
 			var wave_text = "POLICE ASSAULT IN PROGRESS" if director.is_assault_wave else "ASSAULT FADING..."
 			if director.spawn_blocked_by_drama: wave_text = "POLICE REGROUPING"
@@ -123,9 +161,9 @@ func _update_ui():
 			
 			label.text = status + "\n" + wave_text + "\nEnemies: " + str(enemies_left) + "/" + str(cap) + "\nStress: " + str(drama_pct) + "%"
 			
-			if director.spawn_blocked_by_drama: label.modulate = Color.CYAN
-			elif drama_pct > 70: label.modulate = Color(1.0, 0.4, 0.0)
-			else: label.modulate = Color.RED if director.is_assault_wave else Color.YELLOW
+			if director.spawn_blocked_by_drama: _target_label_color = Color.CYAN
+			elif drama_pct > 70: _target_label_color = Color(1.0, 0.4, 0.0)
+			else: _target_label_color = Color.RED if director.is_assault_wave else Color.YELLOW
 
 # ==============================
 # PLAYER SPAWNING
@@ -180,6 +218,7 @@ func _enter_alerted_state():
 # ==============================
 func _on_reinforcements_timeout():
 	if not multiplayer.is_server() or director.spawn_blocked_by_drama: return
+	if director.current_phase == director.Phase.LOOTING: return
 	
 	var current_enemies = GameManager.get_remaining_enemies_count()
 	var cap = director.get_max_enemy_cap()
