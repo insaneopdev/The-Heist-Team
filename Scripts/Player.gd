@@ -35,9 +35,9 @@ var decel_speed := 12.0
 @export var max_aim_distance := 1000.0
 
 # --- HEALTH & DEATH SETTINGS ---
-var max_health = 10000
-var current_health = 10000
-var downed_health = 50 
+var max_health = 100
+var current_health = 100
+var downed_health = 30 
 
 # --- WEAPON SETTINGS ---
 var prim_ammo_max = 30; var prim_ammo_current = 30; var prim_fire_rate = 0.2; var prim_spread = 0.05; var prim_recoil = 0.03; var prim_damage = 10

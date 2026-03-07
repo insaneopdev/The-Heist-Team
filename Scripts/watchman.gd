@@ -153,6 +153,7 @@ func _shoot():
 	can_shoot = false
 
 	var bullet = Bullet_Scene.instantiate()
+	bullet.global_transform = p_muzzle.global_transform # [FIXED] Set the starting position!
 	bullet.direction = (_get_aim_point(target) - p_muzzle.global_position).normalized()
 	get_tree().current_scene.add_child(bullet)
 
