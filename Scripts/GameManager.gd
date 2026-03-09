@@ -3,6 +3,7 @@ extends Node
 # SIGNALS
 signal money_updated(total_amount)
 signal game_ended(is_success)
+signal enemy_died_signal()
 
 # SETTINGS
 var min_loot_required = 5000 
@@ -58,7 +59,8 @@ func add_kill(id):
 	player_stats[id]["kills"] += 1
 
 func register_enemy(): pass # No longer needed, we count group members directly
-func enemy_died(): pass
+func enemy_died(): 
+	enemy_died_signal.emit()
 
 # --- GAME OVER LOGIC (FIXED) ---
 func check_extraction_conditions() -> bool:
@@ -67,9 +69,9 @@ func check_extraction_conditions() -> bool:
 		return false
 		
 	# 2. Check Enemies (Count directly from Tree)
-	var enemies_alive = get_tree().get_nodes_in_group("enemy").size()
-	if enemies_alive > 0:
-		return false
+	# var enemies_alive = get_tree().get_nodes_in_group("enemy").size()
+	# if enemies_alive > 0:
+	# 	return false
 		
 	return true
 
