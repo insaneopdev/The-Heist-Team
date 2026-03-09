@@ -1,11 +1,14 @@
 extends Node3D
 
 # ==============================
-# SCENES
+# SCENES & COMPONENTS
 # ==============================
 @export var player_scene : PackedScene
 @export var watchman_scene : PackedScene
 @export var cop_scene : PackedScene
+
+# The new logic heart
+var director : MissionDirector = MissionDirector.new()
 
 # ==============================
 # SCENE REFERENCES
@@ -21,25 +24,29 @@ extends Node3D
 @onready var label = $Area3D/Label3D
 
 # ==============================
-# BANK PHASES
+# LOCAL STATE
 # ==============================
-# 0 = SETUP
-# 1 = ALERTED
-# 2 = DRILLING
-# 3 = LOOTING
-var current_state := 0
-
-# ==============================
-# CONTROL FLAGS
-# ==============================
-var enemies_spawned := false
 var _players_spawned := false
+@onready var reinforcement_timer : Timer = Timer.new()
+var current_drama_display := 0.0
 
 # ==============================
 # READY
 # ==============================
 func _ready():
 	randomize()
+	add_child(director)
+	
+	# Setup Director
+	director.cop_scene = cop_scene
+	director.enemy_spawn_points = enemy_spawn
+	director.drama_updated.connect(_on_drama_updated)
+	director.phase_changed.connect(_on_phase_changed)
+	
+	# Setup Reinforcement Timer
+	reinforcement_timer.one_shot = true
+	reinforcement_timer.timeout.connect(_on_reinforcements_timeout)
+	add_child(reinforcement_timer)
 
 	if multiplayer.is_server():
 		_spawn_initial_watchmen()
@@ -49,87 +56,226 @@ func _ready():
 		_spawn_existing_players()
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
-	multiplayer.peer_disconnected.connect(remove_player)
+	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+	GameManager.enemy_died_signal.connect(_on_enemy_killed)
+	
+	_update_player_cache()
+	
+	# Initial sync for late joiners
+	if multiplayer.is_server():
+		_broadcast_mission_state()
 
 	drill.visible = false
 	particles.emitting = false
 
 # ==============================
-# PROCESS
+# PROCESS & UI JUICE
 # ==============================
-func _process(_delta):
-	if multiplayer.is_server() and current_state == 0:
-		_check_setup_watchmen_dead()
+var _ui_timer := 0.0
+var _target_label_color : Color = Color.WHITE
+@onready var _original_label_pos : Vector3 = label.position
+
+func _process(delta):
+	_ui_timer += delta
+	if multiplayer.is_server():
+		match director.current_phase:
+			director.Phase.SETUP:
+				_check_setup_watchmen_dead()
+			_:
+				director.update_director(delta)
+				if director.current_phase == director.Phase.LOOTING:
+					if GameManager.total_loot >= GameManager.min_loot_required and not director.can_spawn_more_waves():
+						director.set_phase(director.Phase.ESCAPE)
+						_broadcast_mission_state()
 
 	_update_ui()
+	_apply_ui_juice(delta)
+
+func _apply_ui_juice(delta):
+	label.modulate = label.modulate.lerp(_target_label_color, delta * 5.0)
+	
+	var pulse_speed = 4.0
+	var pulse_amt = 0.05
+	
+	if director.current_phase == director.Phase.LOOTING:
+		pulse_speed = 8.0
+		pulse_amt = 0.12
+	
+	var s = 1.0 + sin(_ui_timer * pulse_speed) * pulse_amt
+	label.scale = label.scale.lerp(Vector3.ONE * s, delta * 10.0)
+	label.position.y = _original_label_pos.y + sin(_ui_timer * 1.5) * 0.1
+	
+	if director.group_drama_level > 0.6:
+		label.rotation.z = sin(_ui_timer * 20.0) * 0.02
+
+# ==============================
+# PERFORMANCE: CACHING
+# ==============================
+func _update_player_cache():
+	director.players_cache = get_tree().get_nodes_in_group("player")
+
+func _on_peer_connected(id):
+	if multiplayer.is_server():
+		spawn_player(id)
+	call_deferred("_update_player_cache")
+
+func _on_peer_disconnected(id):
+	remove_player(id)
+	call_deferred("_update_player_cache")
 
 # ==============================
 # UI
 # ==============================
+func _on_drama_updated(_val):
+	pass # Handled in UI loop for smoothing
+
 func _update_ui():
 	var money_needed = GameManager.min_loot_required - GameManager.total_loot
-	var enemies_left = GameManager.get_remaining_enemies_count()
+	var wave_info = director.get_wave_progress_string()
 
-	if money_needed > 0:
-		label.text = "Need $" + str(money_needed) + " more"
-		label.modulate = Color.RED
-	elif enemies_left > 0:
-		label.text = "Eliminate " + str(enemies_left) + " Enemies!"
-		label.modulate = Color.ORANGE
-	else:
-		label.text = "Get into Escape!"
-		label.modulate = Color.GREEN
+	if money_needed > 0 and director.current_phase != director.Phase.SETUP:
+		label.text = "NEED $" + str(money_needed) + " MORE\nWaves: " + wave_info
+		_target_label_color = Color.RED
+		return
+
+	match director.current_phase:
+		director.Phase.LOOTING:
+			var money_status = "READY" if GameManager.total_loot >= GameManager.min_loot_required else "COLLECT $" + str(GameManager.min_loot_required - GameManager.total_loot)
+			label.text = "VAULT OPEN: COLLECT LOOT\nLoot: " + money_status + "\nWaves: " + wave_info
+			_target_label_color = Color.GOLD
+		director.Phase.ESCAPE:
+			if not director.can_spawn_more_waves():
+				label.text = "✨ GET IN THE VAN NOW! ✨\nVan is leaving!"
+				_target_label_color = Color.GREEN
+			else:
+				label.text = "VAN IS PINNED DOWN!\n(Defend until van can move)\nWaves: " + wave_info
+				_target_label_color = Color.ORANGE
+		director.Phase.SETUP:
+			label.text = "INFILTRATE THE BANK"
+			_target_label_color = Color.WHITE
+		_:
+			var status = "HOLDING POSITION"
+			if director.current_phase == director.Phase.DRILLING: 
+				status = "DRILLING: " + str(int(timer.time_left)) + "s LEFT"
+			
+			var wave_text = "POLICE ASSAULT" if not director.spawn_blocked_by_drama else "POLICE REGROUPING"
+			current_drama_display = lerp(current_drama_display, director.group_drama_level, 0.05)
+			var drama_pct = int(current_drama_display * 100)
+			
+			label.text = status + "\n" + wave_text + " (" + wave_info + ")\nStress: " + str(drama_pct) + "%"
+			
+			if director.spawn_blocked_by_drama: _target_label_color = Color.CYAN
+			elif drama_pct > 70: _target_label_color = Color(1.0, 0.4, 0.0)
+			else: _target_label_color = Color.RED
 
 # ==============================
-# PLAYER SPAWNING (FIXED)
+# MISSION LOGIC & WAVE CONTROL
+# ==============================
+
+func _on_phase_changed(new_phase):
+	if not multiplayer.is_server(): return
+	if new_phase == director.Phase.SETUP: return
+	
+	# Reset and trigger first wave of the NEW phase immediately
+	reinforcement_timer.stop()
+	trigger_next_wave()
+
+func trigger_next_wave():
+	if not multiplayer.is_server(): return
+	if not director.can_spawn_more_waves(): return
+	
+	# 1. Increment wave
+	director.increment_wave()
+	
+	# 2. Spawn full cap for this wave
+	var current_enemies = GameManager.get_remaining_enemies_count()
+	var cap = director.get_max_enemy_cap()
+	var to_spawn = cap - current_enemies
+	
+	if to_spawn > 0:
+		_spawn_wave(to_spawn)
+	
+	# 3. Schedule next wave IF allowed
+	if director.can_spawn_more_waves():
+		reinforcement_timer.start(director.get_spawn_interval())
+	else:
+		# No more waves for this phase! Spawning stops here.
+		reinforcement_timer.stop()
+	
+	_broadcast_mission_state()
+
+func _enter_alerted_state():
+	if director.current_phase != director.Phase.SETUP: return
+	director.set_phase(director.Phase.ENTRY)
+	# _on_phase_changed handles the first wave automatically
+
+func _on_enemy_killed():
+	if not multiplayer.is_server(): return
+	if director.current_phase == director.Phase.SETUP: return
+	
+	var current_enemies = GameManager.get_remaining_enemies_count()
+	
+	# Adaptive Difficulty: Speed up next wave if current is nearly cleared
+	if current_enemies <= 4 and director.can_spawn_more_waves():
+		if reinforcement_timer.time_left > director.adaptive_speed_up_timer:
+			reinforcement_timer.start(director.adaptive_speed_up_timer)
+
+# ==============================
+# SPAWNING SYSTEM
+# ==============================
+
+func _on_reinforcements_timeout():
+	if not multiplayer.is_server(): return
+	
+	# Don't spawn if drama says no, but check again soon
+	if director.spawn_blocked_by_drama: 
+		reinforcement_timer.start(5.0)
+		return
+
+	trigger_next_wave()
+
+func _spawn_wave(total: int):
+	for i in range(total):
+		var marker = _get_furthest_or_safe_marker()
+		if not marker: return
+		var cop = cop_scene.instantiate()
+		cop.global_position = marker.global_position + _get_spawn_offset(1.5)
+		add_child(cop)
+		cop.set_multiplayer_authority(multiplayer.get_unique_id())
+		await get_tree().create_timer(0.1).timeout
+
+# ==============================
+# PLAYER SPAWNING
 # ==============================
 func _spawn_existing_players():
 	spawn_player(multiplayer.get_unique_id())
 	for id in multiplayer.get_peers():
 		spawn_player(id)
 
-func _on_peer_connected(id):
-	if multiplayer.is_server():
-		spawn_player(id)
-
 func spawn_player(id):
-	if has_node(str(id)):
-		return
-
+	if has_node(str(id)): return
 	var p = player_scene.instantiate()
 	p.name = str(id)
 	add_child(p)
-
 	p.global_position = _get_player_spawn()
 	p.set_multiplayer_authority(id)
 
 func remove_player(id):
-	if has_node(str(id)):
-		get_node(str(id)).queue_free()
+	if has_node(str(id)): get_node(str(id)).queue_free()
 
 func _get_player_spawn() -> Vector3:
-	if spawn_points.is_empty():
-		return Vector3.ZERO
-
+	if spawn_points.is_empty(): return Vector3.ZERO
 	var marker = spawn_points.pick_random()
-	if not marker.is_inside_tree():
-		return Vector3.ZERO
-
-	return marker.global_position
+	return marker.global_position if marker.is_inside_tree() else Vector3.ZERO
 
 # ==============================
-# SETUP WATCHMEN (FIXED)
+# SETUP & INITIAL SPAWNING
 # ==============================
 func _spawn_initial_watchmen():
 	for marker in setup_points:
-		if not marker is Marker3D:
-			continue
-		if not marker.is_inside_tree():
-			continue
-
+		if not marker is Marker3D or not marker.is_inside_tree(): continue
 		var w = watchman_scene.instantiate()
 		add_child(w)
-
 		w.global_transform = marker.global_transform
 		w.set_multiplayer_authority(multiplayer.get_unique_id())
 		w.add_to_group("setup_watchman")
@@ -139,93 +285,65 @@ func _check_setup_watchmen_dead():
 		_enter_alerted_state()
 
 # ==============================
-# ALERTED STATE
+# SPAWN HELPERS
 # ==============================
-func _enter_alerted_state():
-	if current_state >= 1:
-		return
+func _get_spawn_offset(radius: float) -> Vector3:
+	return Vector3(randf_range(-radius, radius), 0, randf_range(-radius, radius))
 
-	current_state = 1
-
-	if multiplayer.is_server():
-		_spawn_enemy_set()
-		AlertManager.raise_alert(global_transform.origin)
-
-# ==============================
-# ENEMY SET SPAWNING (FIXED)
-# ==============================
-func _get_enemy_set_count() -> int:
-	var players := get_tree().get_nodes_in_group("player").size()
-
-	if players <= 2:
-		return 6
-	elif players <= 4:
-		return 10
-	else:
-		return 14
-
-func _get_spawn_offset(radius := 5.0) -> Vector3:
-	return Vector3(
-		randf_range(-radius, radius),
-		0.0,
-		randf_range(-radius, radius)
-	)
-
-func _spawn_enemy_set():
-	if enemies_spawned:
-		return
-
-	enemies_spawned = true
-	var total := _get_enemy_set_count()
-	var spawned := 0
-
-	while spawned < total:
-		for marker in enemy_spawn:
-			if spawned >= total:
-				break
-			if not marker is Marker3D:
-				continue
-			if not marker.is_inside_tree():
-				continue
-
-			var cop = cop_scene.instantiate()
-			add_child(cop)
-
-			cop.global_position = marker.global_position + _get_spawn_offset(5.0)
-			cop.set_multiplayer_authority(multiplayer.get_unique_id())
-
-			spawned += 1
+func _get_furthest_or_safe_marker() -> Marker3D:
+	var valid_markers = []
+	var fallback_marker = null
+	var max_dist = -1.0
+	for marker in enemy_spawn:
+		if not marker is Marker3D: continue
+		var min_dist_to_players = 9999.0
+		for p in director.players_cache:
+			if not is_instance_valid(p) or p.state == p.PlayerState.SPECTATING: continue
+			min_dist_to_players = min(min_dist_to_players, marker.global_position.distance_to(p.global_position))
+		if min_dist_to_players > director.safe_spawn_distance: valid_markers.append(marker)
+		if min_dist_to_players > max_dist:
+			max_dist = min_dist_to_players
+			fallback_marker = marker
+	return valid_markers.pick_random() if not valid_markers.is_empty() else fallback_marker
 
 # ==============================
-# BANK DRILL
+# MISSION OBJECTIVES
 # ==============================
 func plant():
-	if multiplayer.is_server() and current_state == 1:
-		sync_start_drill()
+	if multiplayer.is_server() and director.current_phase == director.Phase.ENTRY:
+		rpc("sync_start_drill")
 
 @rpc("authority", "call_local")
 func sync_start_drill():
-	if current_state != 1:
-		return
-
-	current_state = 2
+	director.set_phase(director.Phase.DRILLING)
 	drill.visible = true
 	particles.emitting = true
+	timer.wait_time = 50.0 
 	timer.start()
+	_broadcast_mission_state()
 
 func _on_drilltime_timeout():
 	drill.queue_free()
 	particles.queue_free()
 	anim.play("VaultOpen")
-	current_state = 3
+	director.set_phase(director.Phase.LOOTING)
+	_broadcast_mission_state()
 
 # ==============================
-# EXTRACTION
+# NETWORKING: SYNC
 # ==============================
+func _broadcast_mission_state():
+	rpc("rpc_sync_mission_state", director.current_phase, director.current_wave_index)
+
+@rpc("authority", "call_local")
+func rpc_sync_mission_state(p: int, wave_idx: int):
+	director.current_phase = p as MissionDirector.Phase
+	director.current_wave_index = wave_idx
+
 func _on_area_3d_body_entered(body):
-	if not multiplayer.is_server():
-		return
+	if multiplayer.is_server() and body.is_in_group("player") and body.state != body.PlayerState.SPECTATING:
+		if director.current_phase != director.Phase.ESCAPE or director.can_spawn_more_waves():
+			return
 
-	if body.is_in_group("player") and body.state != body.PlayerState.SPECTATING:
 		if GameManager.check_extraction_conditions():
 			GameManager.rpc("end_game", true)

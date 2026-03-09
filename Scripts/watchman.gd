@@ -9,15 +9,19 @@ extends CharacterBody3D
 @onready var vision_area  = $pivot/Area3D
 @onready var agent        = $NavigationAgent3D
 
+# --- EXTRACTION SHOOTER VSX ---
+var strafe_dir := 1.0
+var strafe_timer := 0.0
+
 # ==============================
 # EXPORTS
 # ==============================
-@export var Bullet_Scene: PackedScene
 @export var speed := 6.0
 @export var shoot_range := 6.0
 @export var shoot_delay := 0.5
 @export var gravity := 20.0
 @export var acceleration := 8.0
+@export var damage := 10
 
 # ==============================
 # STATE
@@ -71,6 +75,9 @@ func _physics_process(delta):
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
 
+	# 4. Crowd Avoidance
+	_apply_crowd_avoidance(delta)
+
 	move_and_slide()
 
 # ==============================
@@ -94,8 +101,7 @@ func _attack_behavior(delta):
 		if dist > shoot_range:
 			_move_via_navigation(delta, target.global_position)
 		else:
-			velocity.x = move_toward(velocity.x, 0, acceleration * delta)
-			velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+			_combat_strafe(delta)
 			if can_shoot:
 				_shoot()
 		return
@@ -108,6 +114,16 @@ func _attack_behavior(delta):
 	else:
 		velocity.x = move_toward(velocity.x, 0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0, acceleration * delta)
+
+func _combat_strafe(delta):
+	strafe_timer -= delta
+	if strafe_timer <= 0:
+		strafe_dir *= -1
+		strafe_timer = randf_range(0.5, 1.5)
+	
+	var side_vec = global_transform.basis.x * strafe_dir * (speed * 0.7)
+	velocity.x = move_toward(velocity.x, side_vec.x, acceleration * delta)
+	velocity.z = move_toward(velocity.z, side_vec.z, acceleration * delta)
 
 # ==============================
 # NAVIGATION
@@ -147,15 +163,39 @@ func _rotate_to_movement(vel: Vector3):
 func _shoot():
 	can_shoot = false
 
-	var bullet = Bullet_Scene.instantiate()
-	bullet.global_transform = p_muzzle.global_transform
-	bullet.direction = (_get_aim_point(target) - p_muzzle.global_position).normalized()
-	get_tree().current_scene.add_child(bullet)
+	# Broadcast shoot visuals and trigger hitscan on the server
+	rpc("sync_shoot", _get_aim_point(target))
 
 	await get_tree().create_timer(shoot_delay).timeout
 
 	if is_instance_valid(self):
 		can_shoot = true
+
+@rpc("call_local", "authority")
+func sync_shoot(aim_target: Vector3):
+	# --- 1. VISUALS (Runs on all clients) ---
+	var f = OmniLight3D.new()
+	f.light_color = Color.YELLOW
+	f.omni_range = 2.5
+	p_muzzle.add_child(f)
+	
+	# Temporary muzzle flash cleanup
+	get_tree().create_timer(0.05).timeout.connect(func():
+		if is_instance_valid(f): f.queue_free()
+	)
+
+	# --- 2. HITSCAN LOGIC (Server Only) ---
+	if multiplayer.is_server():
+		var space_state = get_world_3d().direct_space_state
+		var query = PhysicsRayQueryParameters3D.create(p_muzzle.global_position, aim_target)
+		query.exclude = [self]
+		query.collision_mask = 1 # Assuming default mask hits players/world
+		
+		var result = space_state.intersect_ray(query)
+		if result and result.collider:
+			if result.collider.is_in_group("player") and result.collider.has_method("receive_damage"):
+				# Tell the player they took damage
+				result.collider.rpc("receive_damage", damage)
 
 func _get_aim_point(t: Node3D) -> Vector3:
 	var aim = t.global_position
@@ -200,7 +240,17 @@ func die(killer_id):
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
+		rpc("_sync_death_juice")
+	
+	# Wait a tiny bit for the 'pop' before freeing
+	await get_tree().create_timer(0.1).timeout
 	queue_free()
+
+@rpc("call_local", "authority")
+func _sync_death_juice():
+	# Visual 'Death Pop'
+	var tween = create_tween()
+	tween.tween_property(self, "scale", Vector3.ZERO, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 # ==============================
 # VISUALS
@@ -236,3 +286,17 @@ func has_los_to_target(t: Node3D) -> bool:
 
 	var res = get_world_3d().direct_space_state.intersect_ray(q)
 	return res.is_empty() or res.collider == t
+
+func _apply_crowd_avoidance(delta):
+	for other in get_tree().get_nodes_in_group("enemy"):
+		if other == self: continue
+		var dist = global_position.distance_to(other.global_position)
+		if dist < 1.4:
+			var push_dir = other.global_position.direction_to(global_position)
+			push_dir.y = 0
+			if push_dir.length() < 0.01:
+				push_dir = Vector3(randf_range(-1.0, 1.0), 0, randf_range(-1.0, 1.0)).normalized()
+			
+			var strength = (1.4 - dist) * 10.0
+			velocity.x += push_dir.x * strength * delta
+			velocity.z += push_dir.z * strength * delta

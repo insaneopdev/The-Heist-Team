@@ -2,7 +2,7 @@ extends Area3D
 
 @export var bullet_speed = 40.0 # Slightly slower for fairness
 @export var life_time := 3.0
-var damage: int = 15
+var damage: int = 15 # High enough for stakes (6-7 shots to down)
 
 var direction: Vector3 = Vector3.ZERO
 
