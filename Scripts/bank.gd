@@ -237,10 +237,10 @@ func _on_reinforcements_timeout():
 func _spawn_wave(total: int):
 	for i in range(total):
 		var marker = _get_furthest_or_safe_marker()
-		if not marker: return
+		if not is_instance_valid(marker) or not marker.is_inside_tree(): continue
 		var cop = cop_scene.instantiate()
-		cop.global_position = marker.global_position + _get_spawn_offset(1.5)
 		add_child(cop)
+		cop.global_position = marker.global_position + _get_spawn_offset(1.5)
 		cop.set_multiplayer_authority(multiplayer.get_unique_id())
 		await get_tree().create_timer(0.1).timeout
 
@@ -295,10 +295,10 @@ func _get_furthest_or_safe_marker() -> Marker3D:
 	var fallback_marker = null
 	var max_dist = -1.0
 	for marker in enemy_spawn:
-		if not marker is Marker3D: continue
+		if not is_instance_valid(marker) or not marker is Marker3D or not marker.is_inside_tree(): continue
 		var min_dist_to_players = 9999.0
 		for p in director.players_cache:
-			if not is_instance_valid(p) or p.state == p.PlayerState.SPECTATING: continue
+			if not is_instance_valid(p) or p.state == p.PlayerState.SPECTATING or not p.is_inside_tree(): continue
 			min_dist_to_players = min(min_dist_to_players, marker.global_position.distance_to(p.global_position))
 		if min_dist_to_players > director.safe_spawn_distance: valid_markers.append(marker)
 		if min_dist_to_players > max_dist:

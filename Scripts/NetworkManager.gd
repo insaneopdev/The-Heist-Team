@@ -17,7 +17,6 @@ var connected_players = {}
 
 # SIGNALS
 signal connected_to_server(my_id)
-signal connection_failed
 signal player_list_updated(players_dict)
 signal game_started
 signal game_error(msg)

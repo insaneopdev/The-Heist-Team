@@ -3,7 +3,6 @@ class_name MissionDirector
 
 # --- SIGNALS ---
 signal phase_changed(new_phase)
-signal assault_state_changed(is_assault)
 signal drama_updated(drama_level)
 signal wave_completed(phase, wave_index)
 

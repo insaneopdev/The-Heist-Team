@@ -174,6 +174,7 @@ func _rotate_to(body: Node3D):
 	if not is_instance_valid(body): return
 	var pos := body.global_position
 	pos.y = global_position.y
+	if global_position.is_equal_approx(pos): return
 	look_at(pos, Vector3.UP)
 	
 func _rotate_to_movement(vel: Vector3):
@@ -184,10 +185,10 @@ func _rotate_to_movement(vel: Vector3):
 func _shoot():
 	can_shoot = false
 	var bullet = Bullet_Scene.instantiate()
+	get_tree().current_scene.add_child(bullet)
 	bullet.global_transform = p_muzzle.global_transform
 	var aim_point = _get_aim_point(target)
 	bullet.direction = (aim_point - p_muzzle.global_position).normalized()
-	get_tree().current_scene.add_child(bullet)
 	
 	# Muzzle Flash
 	var f = OmniLight3D.new()
@@ -236,6 +237,10 @@ func receive_damage(amount, attacker_id):
 	if health <= 0: die(attacker_id)
 
 func die(killer_id):
+	set_physics_process(false)
+	if has_node("CollisionShape3D"):
+		$CollisionShape3D.set_deferred("disabled", true)
+		
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
@@ -249,7 +254,7 @@ func die(killer_id):
 func _sync_death_juice():
 	# Death Pop
 	var tween = create_tween()
-	tween.tween_property(self, "scale", Vector3.ZERO, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(self, "scale", Vector3(0.001, 0.001, 0.001), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 func make_cop_dress():
 	var bean = $mesh/bean
