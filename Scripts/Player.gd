@@ -40,7 +40,7 @@ var current_health = 10000
 var downed_health = 30 
 
 # --- WEAPON SETTINGS ---
-var prim_ammo_max = 30; var prim_ammo_current = 30; var prim_fire_rate = 0.2; var prim_spread = 0.05; var prim_recoil = 0.03; var prim_damage = 10
+var prim_ammo_max = 30; var prim_ammo_current = 30; var prim_fire_rate = 0.15; var prim_spread = 0.05; var prim_recoil = 0.03; var prim_damage = 20
 var sec_ammo_max = 6; var sec_ammo_current = 6; var sec_fire_rate = 0.25; var sec_spread = 0.01; var sec_recoil = 0.1; var sec_damage = 40
 var is_primary = true; var is_reloading = false; var time_since_last_shot = 0.0; var muzzle = null
 
