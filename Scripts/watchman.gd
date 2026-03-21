@@ -148,8 +148,10 @@ func _move_via_navigation(delta, target_pos):
 # ROTATION
 # ==============================
 func _rotate_to(body: Node3D):
+	if not is_instance_valid(body): return
 	var pos := body.global_position
 	pos.y = global_position.y
+	if global_position.is_equal_approx(pos): return
 	look_at(pos, Vector3.UP)
 
 func _rotate_to_movement(vel: Vector3):
@@ -237,6 +239,10 @@ func receive_damage(amount, attacker_id):
 		die(attacker_id)
 
 func die(killer_id):
+	set_physics_process(false)
+	if has_node("CollisionShape3D"):
+		$CollisionShape3D.set_deferred("disabled", true)
+		
 	if multiplayer.is_server():
 		GameManager.enemy_died()
 		GameManager.add_kill(killer_id)
@@ -250,7 +256,7 @@ func die(killer_id):
 func _sync_death_juice():
 	# Visual 'Death Pop'
 	var tween = create_tween()
-	tween.tween_property(self, "scale", Vector3.ZERO, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(self, "scale", Vector3(0.001, 0.001, 0.001), 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 
 # ==============================
 # VISUALS

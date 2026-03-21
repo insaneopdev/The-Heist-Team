@@ -8,7 +8,10 @@ var direction: Vector3 = Vector3.ZERO
 
 func _ready():
 	if direction != Vector3.ZERO:
-		look_at(global_position + direction, Vector3.UP)
+		var up_vec = Vector3.UP
+		if abs(direction.normalized().dot(Vector3.UP)) > 0.999:
+			up_vec = Vector3.RIGHT
+		look_at(global_position + direction, up_vec)
 
 func _physics_process(delta):
 	var start = global_transform.origin

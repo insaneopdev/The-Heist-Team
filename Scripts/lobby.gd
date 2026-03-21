@@ -12,7 +12,6 @@ var id
 func _ready():
 	start_btn.hide()
 	NetworkManager.connected_to_server.connect(_on_connected)
-	NetworkManager.connection_failed.connect(_on_fail)
 	NetworkManager.player_list_updated.connect(_on_player_list_update)
 	
 	status_label.text = "Auto-Connecting..."
@@ -23,9 +22,6 @@ func _process(delta: float) -> void:
 func _on_connected(my_id):
 	status_label.text = "Connected! Your ID: " + str(my_id)
 	id = my_id
-
-func _on_fail():
-	status_label.text = "Connection Failed. Check Internet."
 
 # 1. CREATE ROOM
 func _on_create_btn_pressed():
