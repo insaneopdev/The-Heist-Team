@@ -296,6 +296,15 @@ func check_interaction():
 			elif hit.is_in_group("vaultdoor"): hit.owner.plant()
 			elif hit.is_in_group("player"):
 				if hit.state == PlayerState.DOWNED: hit.rpc("revive")
+			
+			# --- SLOT MACHINE INTERACTION ---
+			# Checks if the direct collider has the script
+			elif hit.has_method("interact"):
+				hit.interact()
+			# Checks if the parent has the script (for your StaticBody3D setup)
+			elif hit.get_parent() and hit.get_parent().has_method("interact"):
+				hit.get_parent().interact()
+
 
 @rpc("any_peer", "call_local")
 func receive_damage(amount):
